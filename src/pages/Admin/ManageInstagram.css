@@ -1,0 +1,61 @@
+.instagram-explanation-card {
+  display: flex;
+  gap: 15px;
+  background-color: #faf7f5;
+  border: 1px solid var(--color-border);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  margin-bottom: 30px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.instagram-explanation-card h4 {
+  color: var(--color-text-main);
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.instagram-explanation-card p {
+  font-size: 13px;
+}
+
+.info-icon {
+  color: var(--color-primary-dark);
+  flex-shrink: 0;
+}
+
+.token-form-wrapper {
+  background-color: white;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: 30px;
+}
+
+.input-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+  display: block;
+}
+
+.form-actions-row {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.btn-sync {
+  font-weight: 700;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

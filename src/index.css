@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+:root {
+  /* Cores - Estilo Amoreja (Pastéis e Aconchegantes) */
+  --color-primary: #e8a598;       /* Rosa pastel/pêssego característico */
+  --color-primary-light: #fbebe8; /* Rosa muito claro */
+  --color-primary-dark: #cc8477;  /* Terracota suave */
+  --color-secondary: #ebd4c6;     /* Bege/Creme quente */
+  --color-accent: #dfb247;        /* Dourado suave para detalhes/estrelas */
+  --color-background: #faf7f5;    /* Off-white aconchegante */
+  --color-surface: #ffffff;       /* Branco para cartões */
+  --color-text-main: #3d3431;     /* Marrom/cinza escuro suave (não preto puro) */
+  --color-text-muted: #7d706c;    /* Marrom acinzentado claro */
+  --color-border: #ebdcd7;        /* Bordas sutis */
+  --color-success: #a0c49d;       /* Verde pastel para sucesso */
+  
+  /* Fontes */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', sans-serif;
+  
+  /* Sombras */
+  --shadow-sm: 0 2px 4px rgba(61, 52, 49, 0.04);
+  --shadow-md: 0 4px 12px rgba(61, 52, 49, 0.08);
+  --shadow-lg: 0 8px 24px rgba(61, 52, 49, 0.12);
+  
+  /* Bordas */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-round: 50%;
+  
+  /* Transições */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-text-main);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: var(--color-text-main);
+  line-height: 1.3;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: var(--transition-fast);
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* Botões Estilizados */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-lg);
+  transition: var(--transition-normal);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  box-shadow: 0 4px 10px rgba(232, 165, 152, 0.3);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(232, 165, 152, 0.4);
+}
+
+.btn-secondary {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-primary);
+  color: white;
+  transform: translateY(-2px);
+}
+
+.btn-outline {
+  border: 2px solid var(--color-border);
+  color: var(--color-text-main);
+}
+
+.btn-outline:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+/* Layout Utilitários */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.section-padding {
+  padding: 80px 0;
+}
+
+.section-title {
+  text-align: center;
+  font-size: 36px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.section-title::after {
+  content: '🌸';
+  display: block;
+  font-size: 18px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.section-subtitle {
+  text-align: center;
+  color: var(--color-text-muted);
+  max-width: 600px;
+  margin: 0 auto 50px auto;
+  font-size: 16px;
+}
+
+/* Badges de Dificuldade */
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+}
+
+.badge-facil {
+  background-color: #e2f4c5;
+  color: #5d7e2f;
+}
+
+.badge-medio {
+  background-color: #fbecd0;
+  color: #a77c30;
+}
+
+.badge-avancado {
+  background-color: #fcd8d4;
+  color: #b05c53;
+}
+
+/* Estilos de Formulários */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-text-main);
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: white;
+  transition: var(--transition-fast);
+  color: var(--color-text-main);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(232, 165, 152, 0.15);
+}
+
+/* Transições de Fade In */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Responsividade de Grids */
+.grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 30px;
+}

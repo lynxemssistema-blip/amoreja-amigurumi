@@ -1,0 +1,47 @@
+.btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+}
+
+.actions-cell-orders {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-order-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  transition: var(--transition-fast);
+}
+
+.btn-order-action.approve {
+  background-color: #e2f4c5;
+  color: #5d7e2f;
+  border: 1.5px solid transparent;
+}
+
+.btn-order-action.approve:hover {
+  background-color: #5d7e2f;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.btn-order-action.cancel {
+  background-color: #fcd8d4;
+  color: #b05c53;
+  border: 1.5px solid transparent;
+}
+
+.btn-order-action.cancel:hover {
+  background-color: #b05c53;
+  color: white;
+  transform: translateY(-1px);
+}

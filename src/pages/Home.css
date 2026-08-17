@@ -1,0 +1,723 @@
+/* Hero Section */
+.hero-section {
+  padding: 80px 0;
+  background: radial-gradient(circle at 10% 20%, rgba(251, 235, 232, 0.6) 0%, rgba(250, 247, 245, 1) 90%);
+}
+
+.hero-container {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 50px;
+  align-items: center;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero-subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--color-primary-dark);
+}
+
+.hero-title {
+  font-size: 48px;
+  line-height: 1.2;
+}
+
+.hero-description {
+  font-size: 16px;
+  color: var(--color-text-muted);
+  max-width: 540px;
+  margin-bottom: 12px;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.hero-image-wrapper {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: visible;
+}
+
+.hero-image {
+  width: 100%;
+  height: 380px;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 4px solid white;
+}
+
+.hero-image-badge {
+  position: absolute;
+  bottom: -15px;
+  left: -15px;
+  background-color: white;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+}
+
+.badge-heart {
+  color: var(--color-primary);
+  fill: var(--color-primary-light);
+}
+
+/* Festival Highlight Card */
+.festival-banner-section {
+  padding: 40px 0;
+}
+
+.festival-card {
+  background-color: #f7ede8;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border);
+}
+
+.festival-info {
+  padding: 50px;
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 15px;
+}
+
+.festival-tag {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background-color: var(--color-primary);
+  color: white;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.festival-title {
+  font-size: 26px;
+  line-height: 1.3;
+}
+
+.festival-desc {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.festival-cta-box {
+  margin-top: 10px;
+}
+
+.festival-visual {
+  flex: 0.8;
+  min-height: 300px;
+  position: relative;
+}
+
+.festival-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Features/Diferenciais */
+.features-section {
+  padding: 60px 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background-color: white;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+}
+
+.feature-item {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.feature-icon-wrapper {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-round);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.feature-item h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.feature-item p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* Featured section */
+.loading-box {
+  display: flex;
+  justify-content: center;
+  padding: 60px;
+}
+
+.view-more-box {
+  margin-top: 50px;
+  text-align: center;
+}
+
+/* ── Carrossel de Receitas ── */
+.carousel-wrapper {
+  position: relative;
+  padding: 0 28px;
+}
+
+.carousel-viewport {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.carousel-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carousel-item {
+  flex: 0 0 25%;
+  width: 25%;
+  max-width: 25%;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+/* Forçar que os cards dentro do carrossel tenham imagem menor */
+.carousel-item .card-image-wrapper {
+  padding-top: 75%; /* 4:3 ao invés de 1:1 */
+}
+.carousel-item .product-card {
+  font-size: 0.92rem;
+}
+.carousel-item .card-title {
+  font-size: 0.92rem;
+  -webkit-line-clamp: 2;
+}
+.carousel-item .card-description {
+  font-size: 0.8rem;
+  -webkit-line-clamp: 2;
+}
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--color-border);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: all 0.2s;
+  color: #333;
+}
+.carousel-btn:hover { background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
+.carousel-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.carousel-btn-left { left: -4px; }
+.carousel-btn-right { right: -4px; }
+
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  background: #d4d4d4;
+  cursor: pointer;
+  transition: all 0.3s;
+  padding: 0;
+}
+.carousel-dot.active {
+  background: var(--color-primary);
+  transform: scale(1.25);
+}
+
+@media (max-width: 900px) {
+  .hero-container {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .hero-image-wrapper {
+    order: -1;
+  }
+  .hero-image {
+    height: 300px;
+  }
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .festival-card {
+    flex-direction: column;
+  }
+  .festival-visual {
+    height: 250px;
+  }
+  .festival-info {
+    padding: 30px;
+  }
+  .carousel-btn-left { left: 4px; }
+  .carousel-btn-right { right: 4px; }
+}
+
+/* ── Banner de Maratonas no Topo ── */
+/* ── Banner de Maratonas — TOTALMENTE auto-contido ──
+   Toda a altura vem de bannerSettings.height (inline style do React).
+   overflow: hidden garante que NADA vaza para fora, sem scroll. */
+.top-banner-section {
+  width: 100%;
+  background: #1a1a2e;
+  overflow: hidden;            /* corta qualquer overflow — sem scroll */
+  position: relative;
+  flex-shrink: 0;              /* não encolhe em layouts flex */
+  height: 420px;               /* fallback — sobrescrito pelo inline style */
+}
+
+@media (max-width: 768px) {
+  .top-banner-section {
+    height: 220px;
+  }
+}
+
+/* ── Modo Carrossel ── */
+.top-banner-section.carousel .banner-carousel {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Track deslizante — sem gap aqui; o espaçamento é controlado por padding nos slides */
+.banner-track {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.top-banner-section.carousel .banner-slide {
+  flex-shrink: 0;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  overflow: hidden;
+  /* gap é aplicado como padding-left/right via inline style no JSX */
+  box-sizing: border-box;
+}
+
+/* ── Modo Marquee (scroll contínuo) ── */
+.banner-marquee {
+  width: 100%;
+  height: 100%;                /* exatamente a altura do banner */
+  max-height: 100%;
+  overflow: hidden;            /* corta verticalmente */
+  display: flex;
+  align-items: center;
+}
+
+.marquee-content {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  max-height: 100%;
+  flex-shrink: 0;
+  animation: marquee-scroll var(--speed, 4s) linear infinite;
+}
+
+/* Cada slide do marquee — estritamente dentro da altura do banner */
+.marquee-slide {
+  flex-shrink: 0;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;            /* corta imagem que transborde verticalmente */
+}
+
+.marquee-slide img {
+  height: 100%;                /* 100% da altura do slide = 100% do banner */
+  max-height: 100%;
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+  display: block;
+}
+
+@keyframes marquee-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Fundo suave: imagem oficial da maratona desfocada */
+.banner-slide-bg {
+  position: absolute;
+  inset: -20px; /* estica um pouco para esconder a borda do blur */
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px) brightness(0.45) saturate(1.2);
+  transform: scale(1.08);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Banner Slide (fundo, não-destaque) ──
+   Hierarquia visual: fundo (74%) < laterais-destaque (86%) < central (100%)
+   O scale e brightness tornam as imagens de fundo claramente subordinadas. */
+.banner-slide-img {
+  width: 100%;
+  height: 100%;              /* 100% da altura do slide = 100% do banner */
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+  filter: brightness(0.52) saturate(0.65);
+  transform: scale(0.74);    /* fundo = 74% — menor que os destaques laterais (86%) */
+  transform-origin: center center;
+  transition: filter 0.4s ease, transform 0.4s ease;
+}
+
+/* ── Overlay de texto sobre o banner ── */
+.banner-slide-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.2) 50%,
+    transparent 100%
+  );
+  display: flex;
+  align-items: center;
+  padding: 0 48px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.banner-slide.active .banner-slide-overlay,
+.banner-slide .banner-slide-overlay {
+  pointer-events: all;
+}
+
+.banner-overlay-content {
+  max-width: 480px;
+  color: white;
+  animation: banner-fade-in 0.7s ease-out both;
+}
+
+@keyframes banner-fade-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.banner-tag {
+  display: inline-block;
+  background: var(--color-primary, #e1306c);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+
+.banner-title {
+  font-size: clamp(1.4rem, 3vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 0 16px 0;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.btn-banner {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  padding: 10px 26px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: background 0.25s, color 0.25s;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-banner:hover {
+  background: white;
+  color: #1a1a2e;
+}
+
+/* ── Coverflow de Destaque ──
+   position: absolute; inset: 0  →  exatamente o mesmo box do banner.
+   overflow: hidden  →  nada vaza verticalmente. As imagens laterais saem
+   horizontalmente mas são cortadas pelo overflow: hidden do parent section. */
+.banner-coverflow {
+  position: absolute;
+  inset: 0;                    /* idêntico ao box do banner */
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  perspective: 1200px;
+  overflow: hidden;            /* corta qualquer overflow — sem scroll */
+}
+
+/* Item do coverflow — altura = 100% do banner, nunca mais */
+.coverflow-item {
+  position: absolute;
+  height: 100%;                /* 100% do banner */
+  max-height: 100%;            /* não excede a altura do banner */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  overflow: hidden;            /* corta internamente também */
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
+    opacity 0.55s ease,
+    filter 0.55s ease;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+/* Imagem central — destaque total */
+.coverflow-item.center {
+  z-index: 10;
+  transform: scale(1) translateX(0);
+  opacity: 1;
+  filter: brightness(1) drop-shadow(0 12px 40px rgba(0,0,0,0.7));
+}
+
+/* Anterior (esquerda) — 86% efetivo — claramente maior que fundo (74%) */
+.coverflow-item.prev {
+  z-index: 6;
+  transform: scale(0.86) translateX(-68%);
+  opacity: 0.82;
+  filter: brightness(0.70);
+  cursor: pointer;
+}
+
+/* Próxima (direita) — 86% efetivo — claramente maior que fundo (74%) */
+.coverflow-item.next {
+  z-index: 6;
+  transform: scale(0.86) translateX(68%);
+  opacity: 0.82;
+  filter: brightness(0.70);
+  cursor: pointer;
+}
+
+/* Imagem do coverflow — 96% da altura do banner
+   Índice efetivo: item_scale × 96%
+   • prev/next: 0.86 × 96% = 82% visual
+   • center:    1.00 × 98% = 98% visual  */
+.coverflow-img {
+  height: 96%;
+  width: auto;
+  max-width: 40vw;
+  object-fit: contain;
+  border-radius: 14px;
+  display: block;
+}
+
+/* Imagem CENTRAL: 98% da altura do banner — a maior de todas */
+.coverflow-item.center .coverflow-img {
+  height: 98%;
+  max-width: 44vw;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,0.2),
+    0 16px 60px rgba(0,0,0,0.75),
+    0 0 120px rgba(0,0,0,0.4);
+  animation: coverflow-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes coverflow-pop {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Overlay de texto sobre a imagem central */
+.banner-featured-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  color: white;
+  padding: 0 20px;
+  min-width: 200px;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.banner-featured-overlay .banner-tag {
+  margin-bottom: 6px;
+}
+
+.banner-featured-overlay .banner-title {
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  margin-bottom: 10px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+}
+
+.banner-featured-overlay .btn-banner {
+  pointer-events: all;
+}
+
+/* Dots do coverflow */
+.coverflow-dots {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 12;
+  pointer-events: all;
+}
+
+/* ── Dots do banner ── */
+.banner-dots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s;
+}
+
+.banner-dot.active {
+  background: white;
+  transform: scale(1.3);
+}
+
+/* ── Modo Marquee ── */
+.top-banner-section.marquee .banner-marquee {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+.top-banner-section.marquee .marquee-content {
+  display: flex;
+  height: 100%;
+  animation: marquee-scroll var(--speed, 10s) linear infinite;
+}
+
+.marquee-slide {
+  height: 100%;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.marquee-slide img {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.marquee-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+  display: flex;
+  align-items: flex-end;
+  padding: 16px 20px;
+  justify-content: center;
+}
+
+.banner-title-small {
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+@keyframes marquee-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

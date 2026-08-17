@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"https://slgpkokjcaiprqxpoefr.supabase.co/functions/v1/instagram-webhook?hub.mode=subscribe&hub.verify_token=token_errado&hub.challenge=teste123\")",
+      "WebSearch",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\lynx\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-lynx-Documents-Amoreja\\\\b52093ea-21b9-4e41-b5c9-b4244aad6652\\\\scratchpad\\\\check_encoding.js\")",
+      "Bash(node -e \"try{require.resolve\\('iconv-lite'\\); console.log\\('found'\\)}catch\\(e\\){console.log\\('not found'\\)}\")",
+      "Bash(node \"C:\\\\Users\\\\lynx\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-lynx-Documents-Amoreja\\\\b52093ea-21b9-4e41-b5c9-b4244aad6652\\\\scratchpad\\\\fix_mojibake.js\" \"c:/Users/lynx/Documents/Amoreja/src/pages/Admin/InstagramAI.jsx\")"
+    ]
+  }
+}
