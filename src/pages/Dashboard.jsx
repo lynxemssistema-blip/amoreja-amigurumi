@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
-import { Download, FileText, ShoppingBag, User, Camera, Save, ChevronRight, BookOpen } from 'lucide-react';
+import { Download, FileText, ShoppingBag, User, Camera, Save, ChevronRight, BookOpen, Star, PenTool, Flag } from 'lucide-react';
 import Instagram from '../components/InstagramIcon';
 import './Dashboard.css';
 
@@ -25,10 +26,13 @@ const MOCK_PURCHASES = [
 ];
 
 export default function Dashboard() {
-  const { user, profile, isDemoMode, updateProfile } = useAuth();
+  const { user, profile, isAdmin, isPartner, isColumnist, isMaratonista, isDemoMode, updateProfile } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
+  const [catalogRecipes, setCatalogRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('receitas'); // 'receitas' ou 'perfil'
+  const [adminViewMode, setAdminViewMode] = useState('catalog'); // 'personal' | 'catalog' | 'all_clients'
 
   // Perfil State
   const [fullName, setFullName] = useState('');
@@ -48,6 +52,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchUserOrders = async () => {
+      setLoading(true);
+
       if (isDemoMode) {
         setOrders(MOCK_PURCHASES);
         setLoading(false);
@@ -60,13 +66,23 @@ export default function Dashboard() {
       }
 
       try {
-        const { data: ordersData, error: ordersError } = await supabase
+        // Se Admin e modo catálogo ativado: carregar todas as receitas da plataforma
+        if (isAdmin) {
+          const { data: allProds } = await supabase
+            .from('new_amoreja_products')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (allProds) setCatalogRecipes(allProds);
+        }
+
+        let query = supabase
           .from('new_amoreja_orders')
           .select(`
             id,
             created_at,
             status,
             total_amount,
+            user_id,
             new_amoreja_order_items (
               price,
               new_amoreja_products (
@@ -77,9 +93,13 @@ export default function Dashboard() {
               )
             )
           `)
-          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
+        if (!isAdmin || adminViewMode === 'personal') {
+          query = query.eq('user_id', user.id);
+        }
+
+        const { data: ordersData, error: ordersError } = await query;
         if (ordersError) throw ordersError;
 
         const formatted = (ordersData || []).map(order => ({
@@ -106,7 +126,7 @@ export default function Dashboard() {
     };
 
     fetchUserOrders();
-  }, [user, isDemoMode]);
+  }, [user, isAdmin, adminViewMode, isDemoMode]);
 
   const handleDownload = async (title, pdfPath) => {
     if (!isSupabaseConfigured() || !pdfPath) {
@@ -243,6 +263,26 @@ export default function Dashboard() {
             >
               <User size={20} /> Meu Perfil <ChevronRight size={16} className="arrow-icon" />
             </button>
+            
+            {(isPartner || isColumnist || isAdmin) && (
+              <button 
+                className="dashboard-nav-item"
+                onClick={() => navigate('/meu-canal')}
+                style={{ color: '#059669', marginTop: '10px' }}
+              >
+                <Star size={20} /> Meu Canal <ChevronRight size={16} className="arrow-icon" />
+              </button>
+            )}
+
+            {(isMaratonista || isAdmin) && (
+              <button 
+                className="dashboard-nav-item"
+                onClick={() => navigate('/maratonas')}
+                style={{ color: '#0284c7' }}
+              >
+                <Flag size={20} /> Área da Maratonista <ChevronRight size={16} className="arrow-icon" />
+              </button>
+            )}
           </nav>
         </aside>
 
@@ -253,11 +293,88 @@ export default function Dashboard() {
           {activeTab === 'receitas' && (
             <div className="dashboard-tab-content">
               <div className="dashboard-content-header">
-                <h2>Minhas Receitas</h2>
-                <p>Todas as receitas que você comprou estarão disponíveis aqui para download.</p>
+                <h2>{isAdmin ? 'Minhas Receitas & Acesso Master' : 'Minhas Receitas'}</h2>
+                <p>
+                  {isAdmin 
+                    ? 'Como Administrador Master, você tem acesso irrestrito a todos os PDFs da plataforma e compras dos clientes.'
+                    : 'Todas as receitas que você comprou estarão disponíveis aqui para download.'}
+                </p>
               </div>
 
-              {orders.length > 0 ? (
+              {/* Seletor Master Admin */}
+              {isAdmin && (
+                <div style={{ background: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: '12px', padding: '14px 18px', marginBottom: '22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <strong style={{ color: '#0369a1', fontSize: '14px' }}>👑 Modo Master Admin:</strong>
+                    <span style={{ fontSize: '13px', color: '#0284c7' }}>Escolha o que deseja visualizar no painel:</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAdminViewMode('catalog')}
+                      className={`btn ${adminViewMode === 'catalog' ? 'btn-primary' : 'btn-outline'}`}
+                      style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                    >
+                      📚 Catálogo Completo ({catalogRecipes.length} Receitas)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminViewMode('all_clients')}
+                      className={`btn ${adminViewMode === 'all_clients' ? 'btn-primary' : 'btn-outline'}`}
+                      style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                    >
+                      🛒 Pedidos de Todos os Clientes ({orders.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminViewMode('personal')}
+                      className={`btn ${adminViewMode === 'personal' ? 'btn-primary' : 'btn-outline'}`}
+                      style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                    >
+                      👤 Minhas Compras Pessoais
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isAdmin && adminViewMode === 'catalog' ? (
+                /* Catálogo Completo de PDFs para o Admin baixar qualquer um */
+                <div className="purchased-list">
+                  <div className="order-block">
+                    <div className="order-block-header" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                      <div>
+                        <span className="order-id-label" style={{ color: '#047857' }}>Acesso Master Amoreja</span>
+                        <span className="order-date" style={{ color: '#065f46' }}>Liberado para Administrador</span>
+                      </div>
+                      <div className="order-meta-info">
+                        <span className="order-status-badge completed">Catálogo Completo Ativo</span>
+                      </div>
+                    </div>
+
+                    <div className="order-items-grid">
+                      {catalogRecipes.map((item) => (
+                        <div key={item.id} className="purchased-item-card">
+                          <img src={item.image_url} alt={item.title} className="purchased-item-img" />
+                          <div className="purchased-item-info">
+                            <h3 className="purchased-item-title">{item.title}</h3>
+                            <p className="purchased-item-meta">
+                              {item.partner_id ? '🧵 Receita de Parceira' : '✨ Amoreja Oficial'} • PDF Digital
+                            </p>
+                            
+                            <button 
+                              onClick={() => handleDownload(item.title, item.pdf_path)} 
+                              className="btn btn-primary btn-download"
+                              title="Testar e Baixar PDF"
+                            >
+                              <Download size={16} /> Baixar PDF da Receita
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : orders.length > 0 ? (
                 <div className="purchased-list">
                   {orders.map((order) => (
                     <div key={order.id} className="order-block">

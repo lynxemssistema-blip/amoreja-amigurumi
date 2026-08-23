@@ -17,6 +17,7 @@ export default function ManageUsers() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userOrders, setUserOrders] = useState([]);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [filterRole, setFilterRole] = useState('all'); // 'all' | 'admin' | 'partner' | 'client'
 
   const loadUsers = async () => {
     setLoading(true);
@@ -33,7 +34,30 @@ export default function ManageUsers() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUsers(data || []);
+      
+      let fetchedUsers = data || [];
+
+      // Carregar configurações de parceira dos fallbacks se existirem
+      try {
+        const { data: partnerSettings } = await supabase
+          .from('new_amoreja_settings')
+          .select('key, value')
+          .like('key', 'partner_cfg_%');
+        
+        if (partnerSettings && partnerSettings.length > 0) {
+          const cfgMap = {};
+          partnerSettings.forEach(s => {
+            const uId = s.key.replace('partner_cfg_', '');
+            cfgMap[uId] = JSON.parse(s.value);
+          });
+          fetchedUsers = fetchedUsers.map(u => ({
+            ...u,
+            ...(cfgMap[u.id] || {})
+          }));
+        }
+      } catch (_) {}
+
+      setUsers(fetchedUsers);
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
       setUsers(INITIAL_MOCK_USERS);
@@ -45,6 +69,52 @@ export default function ManageUsers() {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  const handleApprovePartner = async (userId, approve = true) => {
+    const newStatus = approve ? 'approved' : 'rejected';
+    const newRole = approve ? 'partner' : 'client';
+
+    if (!isSupabaseConfigured()) {
+      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole, partner_status: newStatus, is_partner: approve } : u));
+      return;
+    }
+
+    try {
+      const updates = { 
+        role: newRole, 
+        partner_status: newStatus,
+        is_partner: approve,
+        partner_default_commission_pct: 70
+      };
+
+      const { error } = await supabase
+        .from('new_amoreja_profiles')
+        .update(updates)
+        .eq('id', userId);
+
+      // Fallback em settings
+      await supabase.from('new_amoreja_settings').upsert({
+        key: `partner_cfg_${userId}`,
+        value: JSON.stringify(updates)
+      }, { onConflict: 'key' });
+
+      setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
+      alert(approve ? "Acesso de Parceira APROVADO com sucesso!" : "Solicitação de Parceira RECUSADA.");
+    } catch (err) {
+      alert("Erro ao atualizar status de parceira: " + err.message);
+    }
+  };
+
+  const handleTogglePartner = async (userId, currentRole) => {
+    const isCurrentlyPartner = currentRole === 'partner';
+    if (isCurrentlyPartner) {
+      if (!window.confirm("Deseja remover o perfil de Parceira deste usuário?")) return;
+      await handleApprovePartner(userId, false);
+    } else {
+      if (!window.confirm("Deseja promover este usuário a PARCEIRA (Artesã Autora) com acesso ao canal exclusivo?")) return;
+      await handleApprovePartner(userId, true);
+    }
+  };
 
   const toggleAdminStatus = async (userId, currentStatus) => {
     if (!isSupabaseConfigured()) {
@@ -71,6 +141,39 @@ export default function ManageUsers() {
       setUsers(users.map(u => u.id === userId ? { ...u, is_admin: newStatus } : u));
     } catch (err) {
       alert("Erro ao alterar permissões: " + err.message);
+    }
+  };
+
+  const handleToggleColumnist = async (userId, userTags) => {
+    if (!isSupabaseConfigured()) {
+      alert("Ação indisponível no Modo Demo.");
+      return;
+    }
+
+    const currentTags = userTags || [];
+    const isColumnist = currentTags.includes('colunista');
+    
+    let newTags;
+    if (isColumnist) {
+      if (!window.confirm("Deseja remover o perfil de Colunista deste usuário?")) return;
+      newTags = currentTags.filter(t => t !== 'colunista');
+    } else {
+      if (!window.confirm("Deseja conceder acesso de COLUNISTA para este usuário? Ele poderá criar e publicar matérias no Jornal.")) return;
+      newTags = [...currentTags, 'colunista'];
+    }
+
+    try {
+      const { error } = await supabase
+        .from('new_amoreja_profiles')
+        .update({ user_tags: newTags })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setUsers(users.map(u => u.id === userId ? { ...u, user_tags: newTags } : u));
+      alert(isColumnist ? "Perfil de Colunista removido." : "Usuário promovido a Colunista com sucesso!");
+    } catch (err) {
+      alert("Erro ao atualizar status de colunista: " + err.message);
     }
   };
 
@@ -128,7 +231,7 @@ export default function ManageUsers() {
 
       setUsers(users.filter(u => u.id !== userId));
     } catch (err) {
-      alert("Erro ao excluir usuário: " + err.message + "\n\nSe houver restrição de RLS, você precisa adicionar uma política de DELETE para administradores na tabela 'new_amoreja_profiles'.");
+      alert("Erro ao excluir usuário: " + err.message);
     }
   };
 
@@ -167,30 +270,72 @@ export default function ManageUsers() {
     setSelectedUser(null);
   };
 
-  const filteredUsers = users.filter(user => 
-    (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (user.instagram_handle && user.instagram_handle.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = 
+      (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.instagram_handle && user.instagram_handle.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    if (filterRole === 'admin') return user.is_admin;
+    if (filterRole === 'partner') return user.role === 'partner' || user.is_partner || user.partner_status === 'pending';
+    if (filterRole === 'client') return !user.is_admin && user.role !== 'partner' && !user.is_partner;
+
+    return true;
+  });
 
   return (
     <div className="manage-users-container">
       <div className="admin-page-header flex-col-sm">
         <div className="header-title">
-          <h2>Usuários e Permissões</h2>
-          <p>Gerencie quem tem acesso ao painel de administração da loja.</p>
+          <h2>Usuários, Permissões e Parceiras</h2>
+          <p className="admin-page-subtitle">Gerencie acessos de Administradores, Clientes e aprove novas Parceiras / Artesãs.</p>
         </div>
         <div className="header-actions">
-          <div className="search-bar">
+          <div className="search-box">
             <Search size={18} className="search-icon" />
             <input 
               type="text" 
-              placeholder="Buscar por nome, e-mail ou @..." 
+              placeholder="Buscar por nome, email..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
             />
           </div>
         </div>
+      </div>
+
+      {/* Filtros Rápidos por Papel */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <button 
+          onClick={() => setFilterRole('all')}
+          className={`btn ${filterRole === 'all' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '6px 14px', fontSize: '13px' }}
+        >
+          Todos ({users.length})
+        </button>
+        <button 
+          onClick={() => setFilterRole('partner')}
+          className={`btn ${filterRole === 'partner' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '6px 14px', fontSize: '13px', borderColor: '#ea7458' }}
+        >
+          🧵 Parceiras & Artesãs ({users.filter(u => u.role === 'partner' || u.is_partner || u.partner_status === 'pending').length})
+        </button>
+        <button 
+          onClick={() => setFilterRole('admin')}
+          className={`btn ${filterRole === 'admin' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '6px 14px', fontSize: '13px' }}
+        >
+          🛡️ Administradores ({users.filter(u => u.is_admin).length})
+        </button>
+        <button 
+          onClick={() => setFilterRole('client')}
+          className={`btn ${filterRole === 'client' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '6px 14px', fontSize: '13px' }}
+        >
+          👤 Clientes ({users.filter(u => !u.is_admin && u.role !== 'partner' && !u.is_partner).length})
+        </button>
       </div>
 
       {loading ? (
@@ -205,7 +350,8 @@ export default function ManageUsers() {
                 <th>Usuário</th>
                 <th>Contato</th>
                 <th>Data de Cadastro</th>
-                <th>Permissão</th>
+                <th>Papel / Permissão</th>
+                <th>Status Parceira</th>
                 <th className="text-right">Ações</th>
               </tr>
             </thead>
@@ -240,23 +386,68 @@ export default function ManageUsers() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                      <span className={`status-badge ${user.is_admin ? 'status-admin' : 'status-client'}`}>
-                        {user.is_admin ? 'Administrador' : 'Cliente'}
+                      <span className={`status-badge ${user.is_admin ? 'status-admin' : user.role === 'partner' || user.is_partner ? 'status-partner' : 'status-client'}`}>
+                        {user.is_admin ? 'Administrador' : user.role === 'partner' || user.is_partner ? '🧵 Parceira' : 'Cliente'}
                       </span>
                       {user.is_active === false && (
                         <span className="status-badge" style={{ background: '#fee2e2', color: '#ef4444' }}>Desativado</span>
                       )}
                     </div>
                   </td>
+                  <td>
+                    {(user.role === 'partner' || user.is_partner) ? (
+                      user.partner_status === 'pending' ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="badge" style={{ background: '#fef3c7', color: '#b45309', fontWeight: 'bold' }}>
+                            ⏳ Aguardando Aprovação
+                          </span>
+                          <button 
+                            onClick={() => handleApprovePartner(user.id, true)} 
+                            className="btn btn-sm" 
+                            style={{ background: '#10b981', color: 'white', border: 'none', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                            title="Aprovar Acesso"
+                          >
+                            Aprovar
+                          </button>
+                        </div>
+                      ) : user.partner_status === 'rejected' ? (
+                        <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>Recusada</span>
+                      ) : (
+                        <span className="badge" style={{ background: '#ecfdf5', color: '#047857', fontWeight: 600 }}>
+                          ✅ Ativa ({user.partner_default_commission_pct || 70}%)
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: '12px' }}>Não solicitou</span>
+                    )}
+                  </td>
                   <td className="text-right actions-cell">
-
                     <button 
                       onClick={() => openUserModal(user)}
                       className="btn-view-user"
-                      title="Ver Resumo de Compras"
+                      title="Ver Resumo de Compras e Dados"
                     >
                       <Eye size={16} /> Ver
                     </button>
+
+                    <button 
+                      onClick={() => handleTogglePartner(user.id, user.role)}
+                      className={`btn-toggle-admin ${user.role === 'partner' || user.is_partner ? 'remove-admin' : 'make-admin'}`}
+                      style={{ borderColor: '#ea7458', color: user.role === 'partner' || user.is_partner ? '#dc2626' : '#ea7458' }}
+                      title={user.role === 'partner' || user.is_partner ? "Remover de Parceira" : "Tornar Parceira"}
+                    >
+                      {user.role === 'partner' || user.is_partner ? 'Remover Parceira' : '+ Tornar Parceira'}
+                    </button>
+
+                    <button 
+                      onClick={() => handleToggleColumnist(user.id, user.user_tags)}
+                      className={`btn-toggle-admin ${user.user_tags?.includes('colunista') ? 'remove-admin' : 'make-admin'}`}
+                      style={{ borderColor: '#d97706', color: user.user_tags?.includes('colunista') ? '#b45309' : '#d97706' }}
+                      title={user.user_tags?.includes('colunista') ? "Remover Colunista" : "Tornar Colunista"}
+                    >
+                      {user.user_tags?.includes('colunista') ? 'Remover Colunista' : '+ Tornar Colunista'}
+                    </button>
+
                     <button 
                       onClick={() => toggleAdminStatus(user.id, user.is_admin)}
                       className={`btn-toggle-admin ${user.is_admin ? 'remove-admin' : 'make-admin'}`}
@@ -265,9 +456,10 @@ export default function ManageUsers() {
                       {user.is_admin ? (
                         <><ShieldOff size={16} /> Rebaixar</>
                       ) : (
-                        <><Shield size={16} /> Tornar Admin</>
+                        <><Shield size={16} /> Admin</>
                       )}
                     </button>
+
                     <div className="dropdown-actions" style={{ position: 'relative', display: 'inline-block', marginLeft: '6px' }}>
                       <button 
                         onClick={(e) => {

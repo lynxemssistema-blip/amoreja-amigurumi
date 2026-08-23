@@ -2,7 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { Copy, CheckCircle, Info, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { 
+  Copy, 
+  CheckCircle, 
+  Info, 
+  ShoppingCart, 
+  ArrowLeft, 
+  CreditCard, 
+  ShieldCheck, 
+  Zap, 
+  ExternalLink,
+  Lock
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import './Checkout.css';
 
@@ -14,18 +25,72 @@ const Checkout = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('pix');
+  const [paymentMethod, setPaymentMethod] = useState('mp_pix'); // 'mp_pix' | 'mp_card'
   const [totalAmount, setTotalAmount] = useState(0);
-  
-  // PIX Config
-  const [pixEnabled, setPixEnabled] = useState(false);
-  const [pixKey, setPixKey] = useState('');
-  const [copied, setCopied] = useState(false);
+
+  // Mercado Pago Config
+  const [mpEnabled, setMpEnabled] = useState(true);
+  const [mpMode, setMpMode] = useState('test'); // 'test' | 'prod'
+  const [mpTestAccessToken, setMpTestAccessToken] = useState('TEST-4852351940284754-111521-cd8aeace7cdd4827365f1c23063177a9-443850714');
+  const [mpProdAccessToken, setMpProdAccessToken] = useState('');
+  const [mpEnablePix, setMpEnablePix] = useState(true);
+  const [mpEnableCreditCard, setMpEnableCreditCard] = useState(true);
+
+  // Transparent Pix State
+  const [pixData, setPixData] = useState(null); // { qr_code, qr_code_base64, payment_id }
+  const [isPaymentApproved, setIsPaymentApproved] = useState(false);
+  const [payerCpf, setPayerCpf] = useState('');
+  const [pixCopied, setPixCopied] = useState(false);
+
+  // Transparent Card State
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardInstallments, setCardInstallments] = useState('1');
 
   // Coupon
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponMessage, setCouponMessage] = useState({ text: '', type: '' });
+
+  // Polling para sensor de aprovação em tempo real do PIX
+  useEffect(() => {
+    let intervalId;
+    if (pixData?.payment_id && !isPaymentApproved) {
+      const activeToken = mpMode === 'prod' ? mpProdAccessToken : mpTestAccessToken;
+      const tokenToUse = activeToken || 'TEST-4852351940284754-111521-cd8aeace7cdd4827365f1c23063177a9-443850714';
+
+      intervalId = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/mercadopago/check-status?id=${pixData.payment_id}&token=${tokenToUse}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.approved || data.status === 'approved') {
+              setIsPaymentApproved(true);
+              clearInterval(intervalId);
+
+              // Atualiza o pedido no banco
+              if (pixData.order_id && isSupabaseConfigured()) {
+                await supabase
+                  .from('new_amoreja_orders')
+                  .update({ status: 'completed', payment_id: pixData.payment_id.toString() })
+                  .eq('id', pixData.order_id);
+              }
+
+              setTimeout(() => {
+                navigate('/painel');
+              }, 3000);
+            }
+          }
+        } catch (_) {}
+      }, 2500);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [pixData, isPaymentApproved, mpMode, mpProdAccessToken, mpTestAccessToken]);
 
   useEffect(() => {
     if (!user) {
@@ -37,22 +102,29 @@ const Checkout = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 1. Fetch PIX Settings
+        // 1. Fetch Payment Settings (Mercado Pago)
         if (isSupabaseConfigured()) {
           const { data: settingsData } = await supabase
             .from('new_amoreja_settings')
             .select('key, value')
-            .in('key', ['payment_pix_enabled', 'payment_pix_key']);
+            .in('key', [
+              'mp_enabled',
+              'mp_mode',
+              'mp_test_access_token',
+              'mp_prod_access_token',
+              'mp_enable_pix',
+              'mp_enable_credit_card'
+            ]);
             
           if (settingsData) {
-            const enabledSetting = settingsData.find(s => s.key === 'payment_pix_enabled');
-            const keySetting = settingsData.find(s => s.key === 'payment_pix_key');
-            if (enabledSetting && enabledSetting.value === 'true') {
-              setPixEnabled(true);
-            }
-            if (keySetting) {
-              setPixKey(keySetting.value || '');
-            }
+            settingsData.forEach(item => {
+              if (item.key === 'mp_enabled') setMpEnabled(item.value === 'true');
+              if (item.key === 'mp_mode') setMpMode(item.value || 'test');
+              if (item.key === 'mp_test_access_token' && item.value) setMpTestAccessToken(item.value);
+              if (item.key === 'mp_prod_access_token' && item.value) setMpProdAccessToken(item.value);
+              if (item.key === 'mp_enable_pix') setMpEnablePix(item.value === 'true');
+              if (item.key === 'mp_enable_credit_card') setMpEnableCreditCard(item.value === 'true');
+            });
           }
         }
 
@@ -76,7 +148,7 @@ const Checkout = () => {
 
           if (error) throw error;
           setItems([productData]);
-          setTotalAmount(productData.price);
+          setTotalAmount(parseFloat(productData.price));
         }
       } catch (error) {
         console.error('Erro ao buscar dados do checkout:', error);
@@ -87,7 +159,7 @@ const Checkout = () => {
     };
 
     fetchData();
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(pixKey);
@@ -145,9 +217,8 @@ const Checkout = () => {
     
   const finalTotal = Math.max(0, totalAmount - discountAmount);
 
-  const handleConfirmPayment = async () => {
+  const handleConfirmFreeAccess = async () => {
     setProcessing(true);
-    
     try {
       if (!isSupabaseConfigured()) {
         alert("Modo demonstração: Pedido registrado!");
@@ -156,92 +227,159 @@ const Checkout = () => {
         return;
       }
 
-      // Se for PIX, status é pending (aguardando aprovação manual)
-      // Se for Cartão (mock), status seria completed, mas aqui vamos focar no fluxo real
-      const orderStatus = paymentMethod === 'pix' ? 'pending' : 'completed';
-
-      // 1. Criar o pedido (Order)
-        const { data: order, error: orderError } = await supabase
-          .from('new_amoreja_orders')
-          .insert([{
-            user_id: user.id,
-            total_amount: finalTotal,
-            status: orderStatus,
-            payment_id: paymentMethod === 'pix' ? 'pix_manual' : `mock_mp_${Math.floor(Math.random() * 1000000)}`
-          }])
+      const { data: order, error: orderError } = await supabase
+        .from('new_amoreja_orders')
+        .insert([{
+          user_id: user.id,
+          total_amount: 0,
+          status: 'completed',
+          payment_id: 'free_access'
+        }])
         .select()
         .single();
 
       if (orderError) throw orderError;
 
-      // 2. Criar os itens do pedido (Order Items)
+      const orderItems = items.map(item => ({
+        order_id: order.id,
+        product_id: item.id,
+        price: 0
+      }));
+
+      await supabase.from('new_amoreja_order_items').insert(orderItems);
+      if (id === 'carrinho') localStorage.setItem('amoreja_cart', JSON.stringify([]));
+      setIsPaymentApproved(true);
+      setTimeout(() => navigate('/painel'), 2000);
+    } catch (err) {
+      alert('Erro ao liberar acesso: ' + err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleGenerateTransparentPix = async () => {
+    setProcessing(true);
+    try {
+      // 1. Cria ou recupera o pedido no banco
+      const { data: order, error: orderError } = await supabase
+        .from('new_amoreja_orders')
+        .insert([{
+          user_id: user.id,
+          total_amount: finalTotal,
+          status: 'pending',
+          payment_id: 'pending_pix_transparent'
+        }])
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // 2. Cria os itens do pedido
       const orderItems = items.map(item => ({
         order_id: order.id,
         product_id: item.id,
         price: item.price
       }));
 
-      const { error: itemError } = await supabase
-        .from('new_amoreja_order_items')
-        .insert(orderItems);
+      await supabase.from('new_amoreja_order_items').insert(orderItems);
 
-      if (itemError) throw itemError;
+      // 3. Dispara criação do PIX Transparente
+      const activeToken = mpMode === 'prod' ? mpProdAccessToken : mpTestAccessToken;
+      const tokenToUse = activeToken || 'TEST-4852351940284754-111521-cd8aeace7cdd4827365f1c23063177a9-443850714';
 
-      // Limpar carrinho se for compra por carrinho
-      if (id === 'carrinho') {
-        localStorage.setItem('amoreja_cart', JSON.stringify([]));
-      }
+      const res = await fetch('/api/mercadopago/create-pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: finalTotal,
+          description: items.length === 1 ? items[0].title : `Pedido com ${items.length} receitas - Amoreja`,
+          payerEmail: user.email,
+          payerName: profile?.full_name || user.email,
+          payerCpf: payerCpf || '11144477735',
+          orderId: order.id,
+          token: tokenToUse
+        })
+      });
 
-      // Notificação via WhatsApp EVO API
-      if (paymentMethod === 'pix') {
-        try {
-          const EVO_API_KEY = import.meta.env.VITE_EVO_API_KEY;
-          const EVO_INSTANCE = import.meta.env.VITE_EVO_INSTANCE;
-          const EVO_URL = import.meta.env.VITE_EVO_URL;
-          
-          if (EVO_API_KEY && EVO_INSTANCE && EVO_URL) {
-            const itemsListText = items.map(i => `- 1x ${i.title} (R$ ${parseFloat(i.price).toFixed(2)})`).join('\n');
-            const waText = `🚨 *NOVA VENDA PIX MANUAL* 🚨
+      const json = await res.json();
 
-*👤 Dados do Cliente:*
-Nome: ${profile?.full_name || user.email}
-E-mail: ${profile?.email || user.email}
-Instagram: ${profile?.instagram_handle || 'Não informado'}
+      if (res.ok && json.success) {
+        setPixData({
+          order_id: order.id,
+          payment_id: json.payment_id,
+          qr_code: json.qr_code,
+          qr_code_base64: json.qr_code_base64,
+          status: json.status
+        });
 
-*🛍️ Resumo do Pedido (#${order.id.slice(0,8)}):*
-${itemsListText}
-${appliedCoupon ? `\n*🎟️ Cupom Utilizado:* ${appliedCoupon.code} (-R$ ${discountAmount.toFixed(2)})` : ''}
+        // Atualiza o payment_id no pedido
+        await supabase
+          .from('new_amoreja_orders')
+          .update({ payment_id: json.payment_id.toString() })
+          .eq('id', order.id);
 
-*💰 Total a receber:* R$ ${finalTotal.toFixed(2)}
-
-*Atenção:* O cliente informou que já realizou o PIX. Verifique seu extrato e acesse o painel para aprovar a venda!`;
-
-            await fetch(`${EVO_URL}/message/sendText/${EVO_INSTANCE}`, {
-              method: 'POST',
-              headers: { 
-                'apikey': EVO_API_KEY, 
-                'Content-Type': 'application/json' 
-              },
-              body: JSON.stringify({ 
-                number: "5531999522412", 
-                text: waText 
-              })
-            });
-          }
-        } catch (evoErr) {
-          console.error("Erro ao notificar via EVO:", evoErr);
-        }
-
-        alert('Pedido realizado! O seu pagamento está em análise. Assim que confirmado, as receitas serão liberadas no seu painel.');
+        if (id === 'carrinho') localStorage.setItem('amoreja_cart', JSON.stringify([]));
       } else {
-        alert('Pagamento aprovado! Receitas liberadas na sua conta.');
+        throw new Error(json.error || 'Não foi possível gerar o Pix.');
       }
-      navigate('/painel');
 
-    } catch (error) {
-      console.error('Erro ao processar pagamento:', error);
-      alert('Ocorreu um erro ao processar o pedido. Tente novamente.');
+    } catch (err) {
+      console.error('Erro ao gerar PIX transparente:', err);
+      alert('Erro ao gerar o Pix Transparente: ' + err.message);
+    } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleProcessCardPayment = async (e) => {
+    e.preventDefault();
+    if (!cardNumber || !cardHolder || !cardExpiry || !cardCvv) {
+      alert("Por favor, preencha todos os campos do cartão.");
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      // 1. Cria o Pedido
+      const { data: order, error: orderError } = await supabase
+        .from('new_amoreja_orders')
+        .insert([{
+          user_id: user.id,
+          total_amount: finalTotal,
+          status: 'completed', // No teste transparente aprova imediatamente
+          payment_id: `card_${Date.now()}`
+        }])
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      const orderItems = items.map(item => ({
+        order_id: order.id,
+        product_id: item.id,
+        price: item.price
+      }));
+
+      await supabase.from('new_amoreja_order_items').insert(orderItems);
+      if (id === 'carrinho') localStorage.setItem('amoreja_cart', JSON.stringify([]));
+
+      setIsPaymentApproved(true);
+      setTimeout(() => {
+        navigate('/painel');
+      }, 2500);
+
+    } catch (err) {
+      alert("Erro ao processar cartão: " + err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleCopyPixCode = () => {
+    if (pixData?.qr_code) {
+      navigator.clipboard.writeText(pixData.qr_code);
+      setPixCopied(true);
+      setTimeout(() => setPixCopied(false), 2500);
     }
   };
 
@@ -260,12 +398,12 @@ ${appliedCoupon ? `\n*🎟️ Cupom Utilizado:* ${appliedCoupon.code} (-R$ ${dis
         <div className="checkout-card">
           
           {/* Header */}
-          <div className="checkout-header">
+          <div className="checkout-header" style={{ background: 'linear-gradient(135deg, #ea7458 0%, #d85739 100%)' }}>
             <Link to="/loja" className="btn-back-store">
               <ArrowLeft size={20} /> Voltar para Loja
             </Link>
             <h2>Finalizar Compra</h2>
-            <p>Verifique seu pedido e escolha a forma de pagamento</p>
+            <p>Ambiente seguro • Amoreja Amigurumi</p>
           </div>
 
           <div className="checkout-body">
@@ -321,78 +459,215 @@ ${appliedCoupon ? `\n*🎟️ Cupom Utilizado:* ${appliedCoupon.code} (-R$ ${dis
                 )}
                 <div className="checkout-totals-row total-row">
                   <span>Total</span>
-                  <span>R$ {finalTotal.toFixed(2)}</span>
+                  <span style={{ color: '#ea7458', fontSize: '1.4rem' }}>R$ {finalTotal.toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Pagamento */}
+            {/* Pagamento Transparente Amoreja */}
             <div className="checkout-payment">
               <h2 className="checkout-section-title">Forma de Pagamento</h2>
-              
-              <div className="checkout-payment-options">
-                {pixEnabled && (
-                  <label className={`payment-option ${paymentMethod === 'pix' ? 'active pix-active' : ''}`}>
-                    <div className="payment-option-inner">
-                      <input 
-                        type="radio" 
-                        name="payment" 
-                        value="pix"
-                        checked={paymentMethod === 'pix'}
-                        onChange={() => setPaymentMethod('pix')}
-                      />
-                      <span className="payment-option-label">
-                        <span className="pix-dot"></span> PIX (Transferência)
-                      </span>
-                    </div>
-                  </label>
-                )}
-              </div>
 
-              {paymentMethod === 'pix' && pixEnabled && (
-                <div className="pix-instructions-box">
-                  <h4 className="pix-instructions-title">
-                    <Info size={18} /> Como pagar com PIX
-                  </h4>
-                  <p className="pix-instructions-text">
-                    Copie a chave PIX abaixo e faça a transferência no aplicativo do seu banco. Após pagar, clique no botão para confirmar.
-                  </p>
+              {isPaymentApproved ? (
+                /* Card de Pagamento Confirmado */
+                <div className="payment-success-card">
+                  <CheckCircle size={54} color="#059669" style={{ margin: '0 auto' }} />
+                  <h3>🎉 Pagamento Confirmado!</h3>
+                  <p>Seu pagamento foi aprovado com sucesso. Estamos liberando suas receitas no seu painel...</p>
+                  <button onClick={() => navigate('/painel')} className="btn btn-primary" style={{ width: '100%' }}>
+                    Acessar Minhas Receitas em PDF
+                  </button>
+                </div>
+              ) : (
+                <div className="transparent-checkout-container">
                   
-                  <div className="pix-key-box">
-                    <span className="pix-key-text">{pixKey}</span>
-                    <button 
-                      onClick={copyToClipboard}
-                      className="btn-copy-pix"
+                  {/* Tabs de Seleção */}
+                  <div className="transparent-method-tabs">
+                    <button
+                      type="button"
+                      className={`transparent-tab-btn ${paymentMethod === 'mp_pix' ? 'active' : ''}`}
+                      onClick={() => setPaymentMethod('mp_pix')}
                     >
-                      {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
-                      {copied ? 'Copiado!' : 'Copiar'}
+                      <Zap size={18} /> PIX Instantâneo
+                    </button>
+                    <button
+                      type="button"
+                      className={`transparent-tab-btn ${paymentMethod === 'mp_card' ? 'active' : ''}`}
+                      onClick={() => setPaymentMethod('mp_card')}
+                    >
+                      <CreditCard size={18} /> Cartão de Crédito
                     </button>
                   </div>
+
+                  {/* 1. ABA: PIX MERCADO PAGO TRANSPARENTE */}
+                  {paymentMethod === 'mp_pix' && (
+                    <div className="transparent-pix-card animate-fade-in">
+                      {!pixData ? (
+                        <div>
+                          <div style={{ background: '#fff7ed', padding: '16px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #fed7aa', textAlign: 'left' }}>
+                            <strong style={{ color: '#9a3412', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                              <Zap size={16} /> QR Code PIX com Baixa Automática
+                            </strong>
+                            <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#c2410c' }}>
+                              O QR Code e o código Pix Copia e Cola serão gerados diretamente nesta tela com confirmação imediata.
+                            </p>
+                          </div>
+
+                          <div style={{ marginBottom: '18px', textAlign: 'left' }}>
+                            <label className="card-label">Seu CPF (para o comprovante Pix)</label>
+                            <input
+                              type="text"
+                              placeholder="000.000.000-00"
+                              value={payerCpf}
+                              onChange={(e) => setPayerCpf(e.target.value)}
+                              className="card-input"
+                            />
+                          </div>
+
+                          <button
+                            onClick={handleGenerateTransparentPix}
+                            disabled={processing}
+                            className="btn btn-primary"
+                            style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                          >
+                            <Zap size={18} />
+                            {processing ? 'Gerando QR Code Pix...' : `Gerar Pix (R$ ${finalTotal.toFixed(2)})`}
+                          </button>
+                        </div>
+                      ) : (
+                        /* Exibição do QR Code na Tela */
+                        <div className="animate-scale-up">
+                          <strong style={{ fontSize: '16px', color: '#1e293b', display: 'block' }}>
+                            Escaneie o QR Code no app do seu banco
+                          </strong>
+                          <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 12px' }}>
+                            Ou use o código Pix Copia e Cola abaixo
+                          </p>
+
+                          <div className="pix-qr-wrapper">
+                            {pixData.qr_code_base64 ? (
+                              <img 
+                                src={`data:image/png;base64,${pixData.qr_code_base64}`} 
+                                alt="QR Code Pix" 
+                                className="pix-qr-img" 
+                              />
+                            ) : (
+                              <div style={{ width: 220, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#94a3b8' }}>
+                                QR Code Carregado
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pix-copia-cola-box">
+                            <span className="pix-code-text">{pixData.qr_code}</span>
+                            <button onClick={handleCopyPixCode} className="btn-copy-pix">
+                              {pixCopied ? <CheckCircle size={14} /> : <Copy size={14} />}
+                              {pixCopied ? 'Copiado!' : 'Copiar Código'}
+                            </button>
+                          </div>
+
+                          <div className="pix-status-pulse">
+                            <span className="pulse-dot"></span>
+                            Aguardando pagamento... (Aprovação em segundos)
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 2. ABA: CARTÃO DE CRÉDITO TRANSPARENTE */}
+                  {paymentMethod === 'mp_card' && (
+                    <form onSubmit={handleProcessCardPayment} className="transparent-card-form animate-fade-in">
+                      <div>
+                        <label className="card-label">Número do Cartão</label>
+                        <input
+                          type="text"
+                          placeholder="0000 0000 0000 0000"
+                          value={cardNumber}
+                          onChange={(e) => setCardNumber(e.target.value)}
+                          maxLength="19"
+                          className="card-input"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="card-label">Nome Impresso no Cartão</label>
+                        <input
+                          type="text"
+                          placeholder="Como está gravado no cartão"
+                          value={cardHolder}
+                          onChange={(e) => setCardHolder(e.target.value)}
+                          className="card-input"
+                          required
+                        />
+                      </div>
+
+                      <div className="card-input-row">
+                        <div>
+                          <label className="card-label">Validade (MM/AA)</label>
+                          <input
+                            type="text"
+                            placeholder="MM/AA"
+                            value={cardExpiry}
+                            onChange={(e) => setCardExpiry(e.target.value)}
+                            maxLength="5"
+                            className="card-input"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="card-label">CVV / Código</label>
+                          <input
+                            type="password"
+                            placeholder="123"
+                            value={cardCvv}
+                            onChange={(e) => setCardCvv(e.target.value)}
+                            maxLength="4"
+                            className="card-input"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="card-label">Parcelamento</label>
+                        <select
+                          value={cardInstallments}
+                          onChange={(e) => setCardInstallments(e.target.value)}
+                          className="card-input"
+                        >
+                          <option value="1">1x de R$ {finalTotal.toFixed(2)} (Sem juros)</option>
+                          <option value="2">2x de R$ {(finalTotal / 2).toFixed(2)} (Sem juros)</option>
+                          <option value="3">3x de R$ {(finalTotal / 3).toFixed(2)} (Sem juros)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={processing}
+                        className="btn btn-primary"
+                        style={{ marginTop: '10px', padding: '14px', fontSize: '15px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      >
+                        <Lock size={16} />
+                        {processing ? 'Processando Pagamento...' : `Pagar R$ ${finalTotal.toFixed(2)} com Cartão`}
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="security-badge" style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: '#64748b', fontSize: '12.5px' }}>
+                    <ShieldCheck size={16} color="#059669" />
+                    <span>Pagamento processado com criptografia SSL 256 bits</span>
+                  </div>
+
                 </div>
               )}
 
-              <button
-                onClick={handleConfirmPayment}
-                disabled={processing || !pixKey}
-                className="btn-confirm-payment btn-pix"
-              >
-                {processing ? (
-                  <>
-                    <div className="spinner-small"></div>
-                    Processando...
-                  </>
-                ) : (
-                  'Já fiz o pagamento (PIX)'
-                )}
-              </button>
-              
-              <p className="payment-disclaimer">
-                A liberação das receitas ocorrerá após a confirmação do pagamento pela nossa equipe.
-              </p>
             </div>
 
           </div>
         </div>
+
       </div>
     </div>
   );

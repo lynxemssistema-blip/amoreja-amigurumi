@@ -6,25 +6,23 @@ import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import './Navbar.css';
 
 export default function Navbar({ cartCount, onCartClick }) {
-  const { user, isAdmin, signOut, isDemoMode } = useAuth();
+  const { user, isAdmin, isPartner, isColumnist, signOut, isDemoMode } = useAuth();
   const navigate = useNavigate();
 
-  const [siteLogo, setSiteLogo] = useState({ url: '', text: 'Amoreja', subtext: 'Amigurumi' });
+  const [siteLogo, setSiteLogo] = useState({ url: '' });
 
   // Carrega logo do Supabase na montagem
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     supabase
       .from('new_amoreja_site_content')
-      .select('image_url, title, subtitle')
+      .select('image_url')
       .eq('section_key', 'logo')
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setSiteLogo({
-            url: data.image_url || '',
-            text: data.title || 'Amoreja',
-            subtext: data.subtitle || 'Amigurumi'
+            url: data.image_url || ''
           });
         }
       });
@@ -49,21 +47,34 @@ export default function Navbar({ cartCount, onCartClick }) {
           {siteLogo.url ? (
             <img
               src={siteLogo.url}
-              alt={siteLogo.text}
+              alt="Logo Amoreja"
               style={{ height: '36px', width: 'auto', objectFit: 'contain', borderRadius: '6px' }}
             />
           ) : (
-            <span className="logo-emoji">🧶</span>
+            <>
+              <span className="logo-emoji">🧶</span>
+              <span className="logo-text">Amoreja</span>
+            </>
           )}
-          <span className="logo-text">{siteLogo.text}</span>
-          {siteLogo.subtext && <span className="logo-subtext">{siteLogo.subtext}</span>}
         </Link>
 
         <nav className="navbar-links">
           <Link to="/" className="nav-link">Início</Link>
           <Link to="/loja" className="nav-link">Receitas</Link>
+          <Link to="/maratonas" className="nav-link">Maratonas</Link>
+          <Link to="/jornal" className="nav-link">Jornal</Link>
           {user && (
             <Link to="/painel" className="nav-link">Meu Painel</Link>
+          )}
+          {(isPartner || isAdmin) && (
+            <Link to="/parceiro" className="nav-link partner-nav-link" style={{ color: '#ea7458', fontWeight: 'bold' }}>
+              🧵 Canal da Parceira
+            </Link>
+          )}
+          {(isColumnist || isAdmin) && (
+            <Link to="/colunista" className="nav-link" style={{ color: '#2b6cb0', fontWeight: 'bold' }}>
+              ✍️ Área do Colunista
+            </Link>
           )}
           {isAdmin && (
             <Link to="/admin" className="nav-link admin-link">

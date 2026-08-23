@@ -3,8 +3,92 @@ import { Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import ProductCard from '../components/ProductCard';
 import InstagramFeed from '../components/InstagramFeed';
-import { Award, BookOpen, Heart, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  Award, 
+  BookOpen, 
+  Heart, 
+  Users, 
+  ChevronLeft, 
+  ChevronRight,
+  Sparkles,
+  Star,
+  ShieldCheck,
+  Truck,
+  Headphones,
+  Gift,
+  Smile,
+  CheckCircle,
+  CheckCircle2,
+  Flame,
+  Zap,
+  Compass,
+  Coffee,
+  Clock,
+  Gem,
+  Package,
+  FileText,
+  Scissors,
+  Layers,
+  ShoppingBag,
+  Eye,
+  HelpCircle,
+  Palette,
+  Camera,
+  MessageCircle,
+  Download,
+  ThumbsUp,
+  Tag,
+  Infinity as InfinityIcon,
+  Shield,
+  Crown,
+  Lightbulb
+} from 'lucide-react';
 import './Home.css';
+
+// Map de ícones para resolução dinâmica dos diferenciais
+export const ICON_MAP = {
+  BookOpen,
+  Award,
+  Users,
+  Heart,
+  Sparkles,
+  Star,
+  ShieldCheck,
+  Truck,
+  Headphones,
+  Gift,
+  Smile,
+  CheckCircle,
+  CheckCircle2,
+  Flame,
+  Zap,
+  Compass,
+  Coffee,
+  Clock,
+  Gem,
+  Package,
+  FileText,
+  Scissors,
+  Layers,
+  ShoppingBag,
+  Eye,
+  HelpCircle,
+  Palette,
+  Camera,
+  MessageCircle,
+  Download,
+  ThumbsUp,
+  Tag,
+  Infinity: InfinityIcon,
+  Shield,
+  Crown,
+  Lightbulb
+};
+
+export const renderIconComponent = (iconName, size = 24) => {
+  const IconComp = ICON_MAP[iconName] || Sparkles;
+  return <IconComp size={size} />;
+};
 
 // Mockup de dados em caso de falha de conexão com Supabase
 const MOCK_PRODUCTS = [
@@ -42,26 +126,44 @@ const HERO_DEFAULTS = {
   button_text: 'Ver Receitas em PDF',
   button_url: '/loja',
   button2_text: 'Entrar no Grupo',
-  button2_url: 'https://chat.whatsapp.com/DvGLoH4qisk2ir4copcYSm?s=hd&p=i&ilr=0'
+  button2_url: 'https://chat.whatsapp.com/DvGLoH4qisk2ir4copcYSm?s=hd&p=i&ilr=0',
+  image_mode: 'fixed',
+  selected_product_id: ''
 };
+
+export const DEFAULT_FEATURES = [
+  {
+    id: '1',
+    icon: 'BookOpen',
+    title: 'PDFs Passo a Passo',
+    description: 'Receitas extremamente organizadas, com fotos de apoio para cada etapa importante.',
+    visible: true
+  },
+  {
+    id: '2',
+    icon: 'Award',
+    title: 'Qualidade Premium',
+    description: 'Designs testados e validados por dezenas de artesãs antes de serem lançados.',
+    visible: true
+  },
+  {
+    id: '3',
+    icon: 'Users',
+    title: 'Suporte Exclusivo',
+    description: 'Canal de suporte no WhatsApp para tirar qualquer dúvida que surgir durante os pontos.',
+    visible: true
+  }
+];
 
 export default function Home({ onAddToCart }) {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [hero, setHero] = useState(HERO_DEFAULTS);
-  const [maratonas, setMaratonas] = useState([]);
-  const [bannerSettings, setBannerSettings] = useState({
-    style: 'carousel', speed: 4,
-    height: 420, gap: 0, paddingTop: 0, paddingBottom: 0, showBgBlur: true, bgOpacity: 0.55
-  });
-  const [bannerImages, setBannerImages] = useState([]);        // imagens de fundo (carrossel)
-  const [featuredBannerImgs, setFeaturedBannerImgs] = useState([]); // imagens em destaque (coverflow)
-  const [currentFeaturedIdx, setCurrentFeaturedIdx] = useState(0);  // índice ativo no coverflow
-  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
+  const [features, setFeatures] = useState({ visible: true, items: DEFAULT_FEATURES });
   const [loading, setLoading] = useState(true);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const carouselRef = useRef(null);
-  const bannerRef = useRef(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -74,10 +176,18 @@ export default function Home({ onAddToCart }) {
 
       try {
         // Produtos
-        const { data: pData } = await supabase.from('new_amoreja_products').select('*, new_amoreja_maratonas(title)');
+        const { data: pData } = await supabase
+          .from('new_amoreja_products')
+          .select('*, new_amoreja_maratonas(title)')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        
         const products = pData && pData.length > 0 ? pData : MOCK_PRODUCTS;
         setAllProducts(products);
-        setFeaturedProducts(products);
+
+        // Filtra as receitas marcadas como destaque na Home (is_featured = true)
+        const featured = products.filter(p => p.is_featured);
+        setFeaturedProducts(featured.length > 0 ? featured : products);
 
         // Hero do site
         const { data: heroData } = await supabase
@@ -85,7 +195,9 @@ export default function Home({ onAddToCart }) {
           .select('*')
           .eq('section_key', 'hero')
           .maybeSingle();
+
         if (heroData) {
+          const extra = heroData.extra_data || {};
           setHero({
             subtitle: heroData.subtitle || HERO_DEFAULTS.subtitle,
             title: heroData.title || HERO_DEFAULTS.title,
@@ -94,128 +206,26 @@ export default function Home({ onAddToCart }) {
             button_text: heroData.button_text || HERO_DEFAULTS.button_text,
             button_url: heroData.button_url || HERO_DEFAULTS.button_url,
             button2_text: heroData.button2_text || HERO_DEFAULTS.button2_text,
-            button2_url: heroData.button2_url || HERO_DEFAULTS.button2_url
+            button2_url: heroData.button2_url || HERO_DEFAULTS.button2_url,
+            image_mode: extra.image_mode || 'fixed',
+            selected_product_id: extra.selected_product_id || ''
           });
         }
 
-        // Banner Settings
-        const { data: bannerData } = await supabase
+        // Diferenciais / Features
+        const { data: featData } = await supabase
           .from('new_amoreja_site_content')
           .select('*')
-          .eq('section_key', 'banner_settings')
+          .eq('section_key', 'features')
           .maybeSingle();
-        if (bannerData) {
-          let extras = {};
-          try { extras = JSON.parse(bannerData.description || '{}'); } catch {}
-          setBannerSettings({
-            style: bannerData.title || 'carousel',
-            speed: parseInt(bannerData.subtitle) || 4,
-            height: extras.height ?? 420,
-            gap: extras.gap ?? 0,
-            paddingTop: extras.paddingTop ?? 0,
-            paddingBottom: extras.paddingBottom ?? 0,
-            showBgBlur: extras.showBgBlur !== false,
-            bgOpacity: extras.bgOpacity ?? 0.55
+
+        if (featData) {
+          const extra = featData.extra_data || {};
+          setFeatures({
+            visible: extra.visible !== false,
+            items: Array.isArray(extra.items) && extra.items.length > 0 ? extra.items : DEFAULT_FEATURES
           });
         }
-
-        // Maratonas visíveis
-        const { data: mData } = await supabase
-          .from('new_amoreja_maratonas')
-          .select('*')
-          .eq('visible', true)
-          .order('sort_order', { ascending: true });
-        
-        const loadedMaratonas = mData || [];
-        setMaratonas(loadedMaratonas);
-
-        // Data de hoje (sem hora) — usada para encontrar o destaque ativo
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // ─────────────────────────────────────────────────────────────────────────
-        // Lógica do Coverflow:
-        //   - Coleta TODAS as imagens marcadas como destaque (is_featured),
-        //     independentemente da data (passadas, ativas ou futuras).
-        //   - Ordena por featured_from (data crescente).
-        //   - Determina qual está ativa HOJE → essa fica no CENTRO.
-        //   - A anterior na lista fica à ESQUERDA (prev).
-        //   - A próxima na lista fica à DIREITA (next).
-        //   - A posição é 100% guiada pela data — sem timer automático.
-        // ─────────────────────────────────────────────────────────────────────────
-        const allFeaturedImgs = [];
-        const bgImages = [];
-
-        loadedMaratonas.forEach(m => {
-          if (!m.banner_images || !Array.isArray(m.banner_images)) return;
-
-          m.banner_images.forEach((img, imgIdx) => {
-            const imgObj = typeof img === 'string'
-              ? { url: img, is_featured: false, featured_from: null, featured_until: null }
-              : img;
-
-            const slideData = {
-              url: imgObj.url,
-              title: m.title,
-              tag: m.tag,
-              cta_url: m.cta_url,
-              cta_text: m.cta_text,
-              maratona_image_url: m.image_url,
-              isFirst: imgIdx === 0,
-              _featured_from:  imgObj.featured_from  || null,
-              _featured_until: imgObj.featured_until || null,
-            };
-
-            if (imgObj.is_featured) {
-              // Adiciona ao coverflow (frente)
-              allFeaturedImgs.push(slideData);
-              // TAMBÉM adiciona ao fundo para não criar buracos no carrossel/marquee
-              bgImages.push(slideData);
-            } else {
-              bgImages.push(slideData);
-            }
-          });
-        });
-
-        // 1. Ordena todas as imagens de destaque por data (crescente)
-        allFeaturedImgs.sort((a, b) => {
-          const da = a._featured_from ? new Date(a._featured_from) : new Date(0);
-          const db = b._featured_from ? new Date(b._featured_from) : new Date(0);
-          return da - db;
-        });
-
-        // 2. Encontra a imagem ativa HOJE (featured_from <= hoje <= featured_until)
-        const todayMs = today.getTime();
-        let centerIdx = allFeaturedImgs.findIndex(img => {
-          const from  = img._featured_from  ? new Date(img._featured_from  + 'T00:00:00').getTime() : null;
-          const until = img._featured_until ? new Date(img._featured_until + 'T23:59:59').getTime() : null;
-          return (!from || todayMs >= from) && (!until || todayMs <= until);
-        });
-
-        // 3. Fallback: se nenhuma ativa hoje, usa a mais próxima no futuro;
-        //    se todas passadas, usa a última.
-        if (centerIdx === -1) {
-          centerIdx = allFeaturedImgs.findIndex(img => {
-            const from = img._featured_from ? new Date(img._featured_from + 'T00:00:00').getTime() : null;
-            return from && from > todayMs;
-          });
-          if (centerIdx === -1) centerIdx = allFeaturedImgs.length - 1;
-        }
-
-        setFeaturedBannerImgs(allFeaturedImgs);
-        setCurrentFeaturedIdx(Math.max(0, centerIdx));
-
-        // 4. Imagens de fundo: ordena por data
-        bgImages.sort((a, b) => {
-          const dateA = a._featured_from ? new Date(a._featured_from) : null;
-          const dateB = b._featured_from ? new Date(b._featured_from) : null;
-          if (dateA && dateB) return dateA - dateB;
-          if (dateA) return -1;
-          if (dateB) return 1;
-          return 0;
-        });
-
-        setBannerImages(bgImages);
 
       } catch (err) {
         console.error("Erro ao carregar Home:", err.message);
@@ -263,185 +273,107 @@ export default function Home({ onAddToCart }) {
     return () => clearInterval(timer);
   }, [featuredProducts, maxIndex, itemsPerView]);
 
-  // Auto-scroll para o Banner de Maratonas
-  const scrollToBannerSlide = (idx) => {
-    setCurrentBannerIndex(idx);
-  };
-
+  // Auto-scroll para o carrossel de receitas do Hero
   useEffect(() => {
-    if (bannerSettings.style !== 'carousel' || bannerImages.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentBannerIndex(prev => (prev + 1) % bannerImages.length);
-    }, (bannerSettings.speed || 5) * 1000);
-    return () => clearInterval(interval);
-  }, [bannerSettings.style, bannerSettings.speed, bannerImages.length]);
+    if (hero.image_mode !== 'carousel') return;
+    const images = allProducts.filter(p => p.image_url);
+    if (images.length <= 1) return;
 
-  // O coverflow NÃO usa timer — a posição central é determinada pela data ativa.
-  // O usuário pode clicar nas laterais para navegar manualmente (prévia).
+    const timer = setInterval(() => {
+      setCurrentHeroSlide(prev => (prev + 1) % images.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [hero.image_mode, allProducts]);
 
   const isExternal = (url) => url && (url.startsWith('http') || url.startsWith('//'));
 
-  // Mostra o banner se tiver imagens de fundo OU destaques
-  const hasBanner = bannerImages.length > 0 || featuredBannerImgs.length > 0;
-
-  return (
-    <div className="home-page">
-      {/* Banner de Maratonas */}
-      {hasBanner && (
-        <section
-          className={`top-banner-section ${bannerSettings.style}`}
-          style={{ height: `${bannerSettings.height}px` }}
-        >
-
-          {/* ── Fundo da seção: imagem oficial desfocada (se ativo) ── */}
-          {bannerSettings.showBgBlur && bannerImages[0]?.maratona_image_url && (
+  const renderHeroImage = () => {
+    if (hero.image_mode === 'carousel') {
+      const images = allProducts.filter(p => p.image_url);
+      if (images.length === 0) {
+        return (
+          <div className="hero-image-contained-wrapper">
             <div
-              style={{
-                position: 'absolute', inset: 0, zIndex: 0,
-                backgroundImage: `url(${bannerImages[0].maratona_image_url})`,
-                backgroundSize: 'cover', backgroundPosition: 'center',
-                filter: 'blur(18px) brightness(0.4)',
-                transform: 'scale(1.08)'
-              }}
+              className="hero-image-bg-blur"
+              style={{ backgroundImage: `url(${hero.image_url})` }}
             />
-          )}
-
-          {/* ── Fundo: Carrossel ou Marquee ── */}
-          {bannerSettings.style === 'carousel' ? (
-            <div className="banner-carousel">
+            <img src={hero.image_url} alt="Hero" className="hero-image-front" />
+          </div>
+        );
+      }
+      return (
+        <div className="hero-image-carousel">
+          {images.map((prod, idx) => (
+            <div
+              key={prod.id}
+              className={`hero-carousel-slide ${idx === currentHeroSlide ? 'active' : ''}`}
+              style={{
+                position: idx === currentHeroSlide ? 'relative' : 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                opacity: idx === currentHeroSlide ? 1 : 0,
+                transition: 'opacity 1s ease-in-out',
+                zIndex: idx === currentHeroSlide ? 2 : 1
+              }}
+            >
               <div
-                className="banner-track"
-                style={{
-                  width: `${Math.max(bannerImages.length, 1) * 100}%`,
-                  transform: `translateX(-${currentBannerIndex * (100 / Math.max(bannerImages.length, 1))}%)`
-                  /* Sem gap no track — usamos padding nos slides para não quebrar o translateX */
-                }}
-              >
-                {bannerImages.map((slide, idx) => (
-                  <div
-                    key={idx}
-                    className="banner-slide"
-                    style={{
-                      width: `${100 / Math.max(bannerImages.length, 1)}%`,
-                      paddingTop: `${bannerSettings.paddingTop}px`,
-                      paddingBottom: `${bannerSettings.paddingBottom}px`,
-                      /* Gap como padding horizontal — espaçamento visual entre imagens */
-                      paddingLeft: `${bannerSettings.gap / 2}px`,
-                      paddingRight: `${bannerSettings.gap / 2}px`
-                    }}
-                  >
-                    {bannerSettings.showBgBlur && slide.maratona_image_url && (
-                      <div className="banner-slide-bg" style={{ backgroundImage: `url(${slide.maratona_image_url})` }} />
-                    )}
-                    <img
-                      src={slide.url}
-                      alt={`Banner ${idx}`}
-                      className="banner-slide-img"
-                      style={{ opacity: bannerSettings.bgOpacity }}
-                    />
-                  </div>
-                ))}
-              </div>
+                className="hero-image-bg-blur"
+                style={{ backgroundImage: `url(${prod.image_url})` }}
+              />
+              <img
+                src={prod.image_url}
+                alt={prod.title}
+                className="hero-image-front"
+              />
             </div>
-          ) : (
-            <div className="banner-marquee" style={{ '--speed': `${bannerSettings.speed}s` }}>
-              <div className="marquee-content" style={{ gap: `${bannerSettings.gap}px` }}>
-                {[...bannerImages, ...bannerImages].map((slide, idx) => (
-                  <div
-                    key={idx}
-                    className="marquee-slide"
-                    style={{
-                      paddingTop: `${bannerSettings.paddingTop}px`,
-                      paddingBottom: `${bannerSettings.paddingBottom}px`
-                    }}
-                  >
-                    <img
-                      src={slide.url}
-                      alt="Banner Maratona"
-                      style={{ opacity: bannerSettings.bgOpacity, width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Coverflow de Destaques — posição guiada pela data ── */}
-          {featuredBannerImgs.length > 0 ? (
-            <div className="banner-coverflow">
-              {/* Renderiza exatamente 3 slots: prev, center, next */}
-              {[
-                { slot: 'prev',   img: featuredBannerImgs[currentFeaturedIdx - 1], idx: currentFeaturedIdx - 1 },
-                { slot: 'center', img: featuredBannerImgs[currentFeaturedIdx],     idx: currentFeaturedIdx     },
-                { slot: 'next',   img: featuredBannerImgs[currentFeaturedIdx + 1], idx: currentFeaturedIdx + 1 },
-              ].map(({ slot, img, idx }) => {
-                if (!img) return null; // sem imagem anterior ou próxima → slot vazio
-
-                return (
-                  <div
-                    key={slot}
-                    className={`coverflow-item ${slot}`}
-                    onClick={() => {
-                      if (slot === 'center' && img.cta_url) window.open(img.cta_url, '_blank');
-                      else if (slot !== 'center') setCurrentFeaturedIdx(idx);
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <img src={img.url} alt={`Destaque ${slot}`} className="coverflow-img" />
-                  </div>
-                );
-              })}
-
-              {/* Indicadores */}
-              {featuredBannerImgs.length > 1 && (
-                <div className="coverflow-dots">
-                  {featuredBannerImgs.map((_, idx) => (
-                    <button
-                      key={idx}
-                      className={`banner-dot ${idx === currentFeaturedIdx ? 'active' : ''}`}
-                      onClick={() => setCurrentFeaturedIdx(idx)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Sem destaque: overlay com título na imagem atual do carrossel */
-            bannerSettings.style === 'carousel' && bannerImages.length > 0 && (
-              <div className="banner-slide-overlay" style={{ pointerEvents: 'none' }}>
-                <div className="banner-overlay-content">
-                  <span className="banner-tag">{bannerImages[currentBannerIndex]?.tag}</span>
-                  <h2 className="banner-title">{bannerImages[currentBannerIndex]?.title}</h2>
-                  {bannerImages[currentBannerIndex]?.cta_url && (
-                    <span
-                      className="btn btn-banner"
-                      style={{ pointerEvents: 'all', cursor: 'pointer' }}
-                      onClick={() => window.open(bannerImages[currentBannerIndex].cta_url, '_blank')}
-                    >
-                      {bannerImages[currentBannerIndex].cta_text || 'Saiba Mais'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          )}
-
-          {/* Dots do carrossel de fundo — só sem destaques */}
-          {bannerSettings.style === 'carousel' && featuredBannerImgs.length === 0 && bannerImages.length > 1 && (
-            <div className="banner-dots">
-              {bannerImages.map((_, idx) => (
+          ))}
+          {images.length > 1 && (
+            <div className="hero-carousel-dots">
+              {images.map((_, idx) => (
                 <button
                   key={idx}
-                  className={`banner-dot ${idx === currentBannerIndex ? 'active' : ''}`}
-                  onClick={() => scrollToBannerSlide(idx)}
+                  className={`hero-carousel-dot ${idx === currentHeroSlide ? 'active' : ''}`}
+                  onClick={() => setCurrentHeroSlide(idx)}
                 />
               ))}
             </div>
           )}
+        </div>
+      );
+    }
 
-        </section>
-      )}
+    if (hero.image_mode === 'recipe_fixed') {
+      const selectedProd = allProducts.find(p => p.id === hero.selected_product_id);
+      const imgSrc = selectedProd?.image_url || hero.image_url;
+      return (
+        <div className="hero-image-contained-wrapper">
+          <div
+            className="hero-image-bg-blur"
+            style={{ backgroundImage: `url(${imgSrc})` }}
+          />
+          <img src={imgSrc} alt="Hero" className="hero-image-front" />
+        </div>
+      );
+    }
 
+    // Default: 'fixed'
+    return (
+      <div className="hero-image-contained-wrapper">
+        <div
+          className="hero-image-bg-blur"
+          style={{ backgroundImage: `url(${hero.image_url})` }}
+        />
+        <img src={hero.image_url} alt="Hero" className="hero-image-front" />
+      </div>
+    );
+  };
+
+  const visibleFeatureItems = (features.items || []).filter(item => item.visible !== false);
+
+  return (
+    <div className="home-page">
       {/* Hero Section */}
       <section className="hero-section">
         <div className="container hero-container">
@@ -463,8 +395,8 @@ export default function Home({ onAddToCart }) {
             </div>
           </div>
           <div className="hero-image-wrapper animate-fade-in">
-            <img src={hero.image_url} alt="Hero" className="hero-image" />
-            <div className="hero-image-badge">
+            {renderHeroImage()}
+            <div className="hero-image-badge" style={{ zIndex: 5 }}>
               <Heart size={20} className="badge-heart" />
               <span>100% Feito à Mão</span>
             </div>
@@ -472,85 +404,46 @@ export default function Home({ onAddToCart }) {
         </div>
       </section>
 
-      {/* Maratonas (dinâmicas do Supabase) */}
-      {maratonas.length > 0 && (
-        <section className="festival-banner-section">
-          <div className="container">
-            {maratonas.map(m => (
-              <div key={m.id} className="festival-card" style={{ marginBottom: maratonas.length > 1 ? '20px' : 0 }}>
-                <div className="festival-info">
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <span className="festival-tag" style={{ marginBottom: 0 }}>{m.tag}</span>
-                    {m.status === 'finalizada' && (
-                      <span className="festival-tag" style={{ marginBottom: 0, background: '#6c757d', color: 'white', border: 'none' }}>Finalizada</span>
-                    )}
-                    {m.status === 'andamento' && (
-                      <span className="festival-tag" style={{ marginBottom: 0, background: '#28a745', color: 'white', border: 'none' }}>Em Andamento</span>
-                    )}
-                  </div>
-                  <h2 className="festival-title" style={{ marginTop: 0 }}>{m.title}</h2>
-                  <p className="festival-desc">{m.description}</p>
-                  <div className="festival-cta-box">
-                    <a href={m.cta_url} target="_blank" rel="noreferrer" className="btn btn-secondary">
-                      {m.cta_text}
-                    </a>
-                  </div>
+      {/* Destaques (Diferenciais / Features Editáveis pelo Admin) */}
+      {features.visible !== false && visibleFeatureItems.length > 0 && (
+        <section className="features-section">
+          <div className="container features-grid" style={{ gridTemplateColumns: `repeat(${Math.min(visibleFeatureItems.length, 4)}, 1fr)` }}>
+            {visibleFeatureItems.map((item) => (
+              <div key={item.id} className="feature-item animate-fade-in">
+                <div className="feature-icon-wrapper">
+                  {renderIconComponent(item.icon, 24)}
                 </div>
-                {m.image_url && (
-                  <div className="festival-visual">
-                    <img src={m.image_url} alt={m.title} className="festival-img" />
-                  </div>
-                )}
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Destaques (Stats/Diferenciais) */}
-      <section className="features-section">
-        <div className="container features-grid">
-          <div className="feature-item">
-            <div className="feature-icon-wrapper">
-              <BookOpen size={24} />
-            </div>
-            <h3>PDFs Passo a Passo</h3>
-            <p>Receitas extremamente organizadas, com fotos de apoio para cada etapa importante.</p>
-          </div>
-          <div className="feature-item">
-            <div className="feature-icon-wrapper">
-              <Award size={24} />
-            </div>
-            <h3>Qualidade Premium</h3>
-            <p>Designs testados e validados por dezenas de artesãs antes de serem lançados.</p>
-          </div>
-          <div className="feature-item">
-            <div className="feature-icon-wrapper">
-              <Users size={24} />
-            </div>
-            <h3>Suporte Exclusivo</h3>
-            <p>Canal de suporte no WhatsApp para tirar qualquer dúvida que surgir durante os pontos.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Products — CARROSSEL */}
+      {/* Featured Products — CARROSSEL / DESTAQUES */}
       <section className="featured-section section-padding">
         <div className="container">
-          <h2 className="section-title">Receitas em Destaque</h2>
+          <h2 className="section-title">Destaques</h2>
           <p className="section-subtitle">Escolha seu próximo projeto e comece a tecer hoje mesmo!</p>
           
           {loading ? (
             <div className="loading-box">
               <div className="loader"></div>
             </div>
+          ) : featuredProducts.length <= itemsPerView ? (
+            <div className="featured-centered-grid">
+              {featuredProducts.map((product) => (
+                <div key={product.id} className="featured-card-wrapper">
+                  <ProductCard product={product} onAddToCart={onAddToCart} />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="carousel-wrapper">
-              {featuredProducts.length > itemsPerView && (
-                <button className="carousel-btn carousel-btn-left" onClick={() => scrollCarousel(-1)} disabled={carouselIndex === 0}>
-                  <ChevronLeft size={24} />
-                </button>
-              )}
+              <button className="carousel-btn carousel-btn-left" onClick={() => scrollCarousel(-1)} disabled={carouselIndex === 0}>
+                <ChevronLeft size={24} />
+              </button>
 
               <div className="carousel-viewport" ref={carouselRef}>
                 <div className="carousel-track"
@@ -567,11 +460,9 @@ export default function Home({ onAddToCart }) {
                 </div>
               </div>
 
-              {featuredProducts.length > itemsPerView && (
-                <button className="carousel-btn carousel-btn-right" onClick={() => scrollCarousel(1)} disabled={carouselIndex >= maxIndex}>
-                  <ChevronRight size={24} />
-                </button>
-              )}
+              <button className="carousel-btn carousel-btn-right" onClick={() => scrollCarousel(1)} disabled={carouselIndex >= maxIndex}>
+                <ChevronRight size={24} />
+              </button>
             </div>
           )}
 

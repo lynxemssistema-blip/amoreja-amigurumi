@@ -1,0 +1,246 @@
+.journal-page {
+  background-color: #f4efe9; /* Cor de papel envelhecido */
+  min-height: 100vh;
+  padding: 40px 20px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color: #2c2c2c;
+}
+
+.journal-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background-color: #faf7f2;
+  padding: 40px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border: 1px solid #e0d5c1;
+}
+
+/* Header do Jornal */
+.journal-header {
+  text-align: center;
+  border-bottom: 4px solid #2c2c2c;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.journal-meta {
+  display: flex;
+  justify-content: space-between;
+  border-top: 2px solid #2c2c2c;
+  border-bottom: 2px solid #2c2c2c;
+  padding: 5px 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+}
+
+.journal-title {
+  font-family: 'Playfair Display', 'Georgia', serif;
+  font-size: 4.5rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -2px;
+  margin: 0;
+  line-height: 1;
+}
+
+.journal-meta-bottom {
+  margin-top: 15px;
+  font-style: italic;
+  font-size: 1.2rem;
+  color: #555;
+}
+
+/* Layout Principal */
+.journal-content-wrapper {
+  display: flex;
+  gap: 40px;
+}
+
+.journal-sidebar {
+  flex: 0 0 300px;
+  border-right: 1px solid #ccc;
+  padding-right: 20px;
+}
+
+.journal-main-articles {
+  flex: 1;
+}
+
+.articles-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* Artigo Padrão (Clássico) */
+.journal-article {
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 30px;
+}
+
+.article-headline {
+  font-size: 2.2rem;
+  line-height: 1.1;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.article-subheadline {
+  font-size: 1.2rem;
+  font-weight: normal;
+  color: #555;
+  font-style: italic;
+  margin-bottom: 15px;
+}
+
+.article-byline {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  padding: 5px 0;
+  margin-bottom: 20px;
+}
+
+.article-body {
+  column-count: 2; /* Texto em colunas estilo jornal */
+  column-gap: 30px;
+  text-align: justify;
+  line-height: 1.6;
+  font-size: 1.05rem;
+}
+
+.article-image-wrapper {
+  margin-bottom: 20px;
+}
+.article-image {
+  width: 100%;
+  height: auto;
+  border: 1px solid #ddd;
+  padding: 4px;
+  background: white;
+}
+
+/* Artigo Principal (Destaque da Capa) */
+.main-article .article-headline {
+  font-size: 3.5rem;
+}
+.main-article .article-body {
+  column-count: 3;
+}
+
+/* Layout: Modern */
+.layout-modern {
+  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+}
+.layout-modern .article-headline {
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -1px;
+}
+.layout-modern .article-body {
+  column-count: 1;
+  font-size: 1.1rem;
+}
+
+/* Layout: Image-Heavy */
+.layout-image-heavy .article-image-wrapper {
+  margin: -40px -40px 30px -40px; /* Sai da caixa para dar destaque */
+}
+.layout-image-heavy .article-image {
+  border: none;
+  padding: 0;
+}
+
+/* Calendário */
+.calendar-widget {
+  background: #fdfaf6;
+  padding: 20px;
+  border: 2px solid #2c2c2c;
+}
+.calendar-title {
+  text-align: center;
+  border-bottom: 2px solid #2c2c2c;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+}
+.calendar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.calendar-item {
+  display: flex;
+  gap: 15px;
+  padding: 15px 0;
+  border-bottom: 1px solid #e0d5c1;
+}
+.calendar-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #2c2c2c;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  min-width: 60px;
+}
+.cal-day { font-size: 1.5rem; font-weight: bold; }
+.cal-month { font-size: 0.8rem; text-transform: uppercase; }
+.calendar-details strong { display: block; margin-bottom: 5px; }
+
+/* Paginação */
+.journal-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  margin-top: 50px;
+  padding-top: 20px;
+  border-top: 2px solid #2c2c2c;
+}
+.journal-pagination button {
+  background: none;
+  border: 1px solid #2c2c2c;
+  padding: 8px 16px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.journal-pagination button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.journal-footer-links {
+  text-align: center;
+  margin-top: 30px;
+  font-size: 0.9rem;
+}
+.journal-footer-links a {
+  color: #555;
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .journal-content-wrapper {
+    flex-direction: column;
+  }
+  .journal-sidebar {
+    flex: auto;
+    border-right: none;
+    border-bottom: 1px solid #ccc;
+    padding-right: 0;
+    padding-bottom: 20px;
+  }
+  .article-body, .main-article .article-body {
+    column-count: 1;
+  }
+  .journal-title {
+    font-size: 2.5rem;
+  }
+  .main-article .article-headline {
+    font-size: 2rem;
+  }
+}

@@ -1,0 +1,614 @@
+/* ══════════════════════════════════════════════════════
+   PÁGINA DE MARATONAS — AMOREJA AMIGURUMI
+   ══════════════════════════════════════════════════════ */
+
+.maratonas-page {
+  min-height: 100vh;
+  background-color: #fbf9f8;
+  color: var(--color-text-main, #3d3431);
+}
+
+/* ── Top Banner Section & Coverflow (Reutilizado com alta fidelidade) ── */
+.top-banner-section {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #1a1a2e;
+}
+
+.top-banner-section .banner-carousel {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.top-banner-section .banner-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.top-banner-section .banner-slide {
+  height: 100%;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.top-banner-section .banner-slide-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(14px) brightness(0.6);
+  z-index: 1;
+}
+
+.top-banner-section .banner-slide-img {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* Coverflow */
+.maratonas-page .banner-coverflow {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  perspective: 1200px;
+  overflow: hidden;
+}
+
+.maratonas-page .coverflow-item {
+  position: absolute;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  overflow: hidden;
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
+    opacity 0.55s ease,
+    filter 0.55s ease;
+  transform-origin: center center;
+}
+
+.maratonas-page .coverflow-item.center {
+  z-index: 10;
+  transform: scale(1) translateX(0);
+  opacity: 1;
+  filter: brightness(1) drop-shadow(0 12px 40px rgba(0,0,0,0.7));
+}
+
+.maratonas-page .coverflow-item.prev {
+  z-index: 6;
+  transform: scale(0.86) translateX(-68%);
+  opacity: 0.82;
+  filter: brightness(0.70);
+  cursor: pointer;
+}
+
+.maratonas-page .coverflow-item.next {
+  z-index: 6;
+  transform: scale(0.86) translateX(68%);
+  opacity: 0.82;
+  filter: brightness(0.70);
+  cursor: pointer;
+}
+
+.maratonas-page .coverflow-img {
+  height: 96%;
+  width: auto;
+  max-width: 40vw;
+  object-fit: contain;
+  border-radius: 14px;
+  display: block;
+}
+
+.maratonas-page .coverflow-item.center .coverflow-img {
+  height: 98%;
+  max-width: 44vw;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,0.2),
+    0 16px 60px rgba(0,0,0,0.75);
+}
+
+.maratonas-page .coverflow-dots,
+.maratonas-page .banner-dots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 12;
+  pointer-events: all;
+}
+
+.maratonas-page .banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s;
+}
+
+.maratonas-page .banner-dot.active {
+  background: white;
+  transform: scale(1.3);
+}
+
+.maratonas-page .top-banner-section.marquee .banner-marquee {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+}
+
+.maratonas-page .top-banner-section.marquee .marquee-content {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  animation: marquee-scroll var(--speed, 10s) linear infinite;
+}
+
+.maratonas-page .marquee-slide {
+  height: 100%;
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.maratonas-page .marquee-slide img {
+  height: 100%;
+  width: auto;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Page Header Section ── */
+.maratonas-header-section {
+  position: relative;
+  z-index: 2;
+  margin-top: 0;
+  padding: 50px 0 34px;
+  background: radial-gradient(circle at 10% 20%, rgba(251, 235, 232, 0.7) 0%, rgba(250, 247, 245, 1) 90%);
+  border-bottom: 1px solid #ebd8cf;
+  text-align: center;
+  clear: both;
+}
+
+.maratonas-header-content {
+  max-width: 780px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.maratonas-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fdf2f0;
+  color: #df6951;
+  border: 1px solid #f9d5cc;
+  padding: 8px 18px;
+  border-radius: 50px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 6px;
+  margin-bottom: 18px;
+}
+
+.maratonas-main-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-family: var(--font-heading, "Playfair Display", serif);
+  font-weight: 800;
+  color: #3d3431;
+  margin-bottom: 14px;
+  line-height: 1.2;
+}
+
+.maratonas-main-desc {
+  font-size: 1.05rem;
+  color: #736763;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+/* Filtros */
+.maratonas-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.filter-btn {
+  background: white;
+  border: 1.5px solid #ebd8cf;
+  color: #645a55;
+  padding: 8px 18px;
+  border-radius: 30px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  border-color: #df6951;
+  color: #df6951;
+}
+
+.filter-btn.active {
+  background: #df6951;
+  color: white;
+  border-color: #df6951;
+  box-shadow: 0 4px 12px rgba(223, 105, 81, 0.3);
+}
+
+/* ── Listagem de Maratonas ── */
+.maratonas-list-section {
+  padding: 60px 0 80px;
+}
+
+.maratonas-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.maratona-full-card {
+  background: white;
+  border-radius: 20px;
+  border: 1px solid #ebd8cf;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.maratona-full-card:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+.maratona-card-main {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 30px;
+  align-items: center;
+}
+
+@media (max-width: 960px) {
+  .maratona-card-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.maratona-card-info {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.maratona-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.maratona-tag {
+  background: #fbf0ec;
+  color: #df6951;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.status-badge.live {
+  background: #e6f7ec;
+  color: #1b873f;
+  border: 1px solid #c2eed1;
+}
+
+.status-badge.ended {
+  background: #f1f3f5;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+}
+
+.maratona-card-title {
+  font-size: 1.85rem;
+  font-family: var(--font-heading, "Playfair Display", serif);
+  font-weight: 800;
+  color: #2b2320;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.maratona-card-desc {
+  font-size: 0.98rem;
+  color: #665b56;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.maratona-highlights {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.highlight-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fdf8f5;
+  border: 1px solid #f2e3dc;
+  color: #5c4e48;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.maratona-cta-row {
+  margin-top: 12px;
+}
+
+.btn-maratona-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #df6951;
+  color: white;
+  padding: 13px 28px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(223, 105, 81, 0.35);
+}
+
+.btn-maratona-action:hover {
+  background: #c7563f;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(223, 105, 81, 0.45);
+}
+
+.maratona-card-visual {
+  height: 100%;
+  min-height: 320px;
+  position: relative;
+  background: #f3e9e3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.maratona-official-img {
+  width: 100%;
+  height: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.maratona-full-card:hover .maratona-official-img {
+  transform: scale(1.03);
+}
+
+/* Receitas Vinculadas */
+.maratona-related-recipes {
+  background: #faf6f4;
+  border-top: 1px solid #ebd8cf;
+  padding: 30px 40px;
+}
+
+.related-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.related-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.related-title-box h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #3d3431;
+  margin: 0;
+}
+
+.related-icon {
+  color: #df6951;
+}
+
+.related-count {
+  font-size: 0.8rem;
+  color: #887d77;
+  font-weight: 600;
+}
+
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.related-item {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── Como Funcionam as Maratonas ── */
+.maratonas-how-it-works {
+  padding: 80px 0;
+  background: white;
+  border-top: 1px solid #ebd8cf;
+}
+
+.how-it-works-header {
+  text-align: center;
+  max-width: 650px;
+  margin: 0 auto 50px;
+}
+
+.how-it-works-header .section-subtitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #df6951;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.how-it-works-header .section-title {
+  font-size: 2.2rem;
+  font-family: var(--font-heading, "Playfair Display", serif);
+  font-weight: 800;
+  color: #2b2320;
+  margin-bottom: 12px;
+}
+
+.how-it-works-header .section-desc {
+  font-size: 0.95rem;
+  color: #736763;
+  line-height: 1.6;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+}
+
+.step-card {
+  background: #fbf9f8;
+  border: 1px solid #ebd8cf;
+  border-radius: 16px;
+  padding: 30px 24px;
+  position: relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.step-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+.step-number {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #f1dfd7;
+  font-family: var(--font-heading, "Playfair Display", serif);
+  line-height: 1;
+}
+
+.step-icon-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #fbf0ec;
+  color: #df6951;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.step-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #3d3431;
+  margin-bottom: 10px;
+}
+
+.step-card p {
+  font-size: 0.88rem;
+  color: #736763;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Loading & Empty States */
+.maratonas-loading,
+.maratonas-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 16px;
+  border: 1px dashed #ebd8cf;
+}
+
+.empty-emoji {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 14px;
+}
+
+.maratonas-empty-state h3 {
+  font-size: 1.3rem;
+  color: #3d3431;
+  margin-bottom: 8px;
+}
+
+.maratonas-empty-state p {
+  color: #736763;
+  font-size: 0.95rem;
+}

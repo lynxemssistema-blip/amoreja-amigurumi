@@ -5,10 +5,13 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Store from './pages/Store';
+import Maratonas from './pages/Maratonas';
 import ProductDetail from './pages/ProductDetail';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Checkout from './pages/Checkout';
+import Journal from './pages/Journal/Journal';
+import JournalArchive from './pages/Journal/JournalArchive';
 
 // Importando páginas administrativas
 import AdminLayout from './pages/Admin/AdminLayout';
@@ -21,9 +24,15 @@ import ManageWhatsApp from './pages/Admin/ManageWhatsApp';
 import WhatsAppWeb from './pages/Admin/WhatsAppWeb';
 import ManageSettings from './pages/Admin/ManageSettings';
 import ManageUsers from './pages/Admin/ManageUsers';
+import AdminJournal from './pages/Admin/AdminJournal';
 import FinancialDashboard from './pages/Admin/FinancialDashboard';
 import ManageCoupons from './pages/Admin/ManageCoupons';
 import Help from './pages/Admin/Help';
+import MercadoPagoIntegration from './pages/Admin/MercadoPagoIntegration';
+import PartnerDashboard from './pages/Partner/PartnerDashboard';
+import ColumnistDashboard from './pages/Columnist/ColumnistDashboard';
+import EmailWeb from './pages/Admin/EmailWeb';
+import ContextHelp from './components/ContextHelp';
 import { X, Trash2, ShoppingBag } from 'lucide-react';
 import './App.css';
 
@@ -39,6 +48,19 @@ function MainAppContent() {
   const navigate = useNavigate();
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isHelpPinned, setIsHelpPinned] = useState(() => {
+    return localStorage.getItem('amoreja_help_pinned') === 'true';
+  });
+
+  // Efeito para ajustar o corpo da página quando o painel de ajuda for fixado
+  useEffect(() => {
+    if (isHelpPinned) {
+      document.body.classList.add('help-pinned');
+    } else {
+      document.body.classList.remove('help-pinned');
+    }
+    localStorage.setItem('amoreja_help_pinned', isHelpPinned.toString());
+  }, [isHelpPinned]);
 
   // Recupera carrinho do localStorage se houver
   useEffect(() => {
@@ -57,6 +79,14 @@ function MainAppContent() {
       alert("Esta receita já está no seu carrinho!");
       return;
     }
+
+    // Rastrear intenção de compra / carrinho para estatísticas da parceira
+    try {
+      const cartKey = `recipe_cart_added_${product.id}`;
+      const count = parseInt(localStorage.getItem(cartKey) || '0') + 1;
+      localStorage.setItem(cartKey, count.toString());
+    } catch (_) {}
+
     const newCart = [...cart, product];
     saveCart(newCart);
     setIsCartOpen(true); // Abre o carrinho automaticamente
@@ -90,6 +120,9 @@ function MainAppContent() {
           <Routes>
             <Route path="/" element={<Home onAddToCart={handleAddToCart} />} />
             <Route path="/loja" element={<Store onAddToCart={handleAddToCart} />} />
+            <Route path="/maratonas" element={<Maratonas onAddToCart={handleAddToCart} />} />
+            <Route path="/jornal" element={<Journal />} />
+            <Route path="/jornal/arquivo" element={<JournalArchive />} />
             <Route path="/receita/:id" element={<ProductDetail onAddToCart={handleAddToCart} />} />
             <Route path="/login" element={<Login />} />
             
@@ -99,6 +132,12 @@ function MainAppContent() {
                 <Dashboard />
               </PrivateRoute>
             } />
+
+            {/* Rota Exclusiva do Canal da Parceira */}
+            {/* Rotas de Parceiros / Colunistas Unificada */}
+            <Route path="/meu-canal" element={<PrivateRoute><PartnerDashboard /></PrivateRoute>} />
+            <Route path="/parceiro" element={<PrivateRoute><PartnerDashboard /></PrivateRoute>} />
+            <Route path="/colunista" element={<PrivateRoute><Navigate to="/meu-canal" replace /></PrivateRoute>} />
 
             <Route path="/checkout/:id" element={
               <PrivateRoute>
@@ -113,11 +152,14 @@ function MainAppContent() {
               <Route path="instagram" element={<Navigate to="/admin/instagram-chat" replace />} />
               <Route path="instagram-chat" element={<InstagramWeb defaultTab="direct" />} />
               <Route path="conteudo" element={<ManageSiteContent />} />
+              <Route path="jornal" element={<AdminJournal />} />
               <Route path="whatsapp" element={<WhatsAppWeb />} />
               <Route path="configuracoes" element={<ManageSettings />} />
               <Route path="usuarios" element={<ManageUsers />} />
               <Route path="financeiro" element={<FinancialDashboard />} />
               <Route path="cupons" element={<ManageCoupons />} />
+              <Route path="mercadopago" element={<MercadoPagoIntegration />} />
+              <Route path="emails" element={<EmailWeb />} />
               <Route path="ajuda" element={<Help />} />
             </Route>
           </Routes>
@@ -183,6 +225,12 @@ function MainAppContent() {
             </div>
           </div>
         )}
+
+        {/* Componente de Ajuda de Contexto Flutuante e Fixável */}
+        <ContextHelp 
+          isPinned={isHelpPinned} 
+          onTogglePin={() => setIsHelpPinned(!isHelpPinned)} 
+        />
       </div>
   );
 }

@@ -6,6 +6,7 @@ import './ManageInstagram.css';
 
 export default function ManageInstagram() {
   const [token, setToken] = useState('');
+  const [isFeedVisible, setIsFeedVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
@@ -30,13 +31,22 @@ export default function ManageInstagram() {
 
         if (error) {
           if (error.code === 'PGRST116') {
-            // Token não inserido ainda
             setToken('');
           } else {
             throw error;
           }
         } else if (data) {
           setToken(data.value);
+        }
+
+        // Carregar status de visibilidade do feed na Home
+        const { data: contentData } = await supabase
+          .from('new_amoreja_site_content')
+          .select('*')
+          .eq('section_key', 'instagram_feed')
+          .maybeSingle();
+        if (contentData && contentData.extra_data) {
+          setIsFeedVisible(contentData.extra_data.visible !== false);
         }
       } catch (err) {
         console.error("Erro ao obter token do banco:", err.message);
@@ -48,6 +58,34 @@ export default function ManageInstagram() {
 
     fetchToken();
   }, []);
+
+  const handleToggleFeedVisibility = async () => {
+    const nextVal = !isFeedVisible;
+    setIsFeedVisible(nextVal);
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { data: current } = await supabase
+        .from('new_amoreja_site_content')
+        .select('*')
+        .eq('section_key', 'instagram_feed')
+        .maybeSingle();
+
+      await supabase.from('new_amoreja_site_content').upsert({
+        section_key: 'instagram_feed',
+        title: current?.title || 'Nosso Feed do Instagram',
+        subtitle: current?.subtitle || 'Siga-nos @amorejaamigurumi e acompanhe as novidades!',
+        extra_data: {
+          ...(current?.extra_data || {}),
+          visible: nextVal
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'section_key' });
+      setMessage(nextVal ? "✅ Seção do Instagram ATIVADA na página inicial!" : "⚪ Seção do Instagram DESATIVADA / OCULTA na página inicial.");
+      setTimeout(() => setMessage(''), 4000);
+    } catch (err) {
+      setErrorMsg("Erro ao alterar visibilidade: " + err.message);
+    }
+  };
 
   const handleSaveToken = async (e) => {
     e.preventDefault();
@@ -147,6 +185,38 @@ export default function ManageInstagram() {
     <div className="manage-instagram-container">
       <div className="admin-page-header">
         <h2>Integração com Instagram (Opção A)</h2>
+      </div>
+
+      {/* Toggle de Ativação / Desativação da Seção */}
+      <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px 20px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div>
+          <h4 style={{ margin: '0 0 4px', fontSize: '1rem', color: '#1e293b' }}>
+            Exibição do Feed do Instagram na Página Inicial
+          </h4>
+          <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
+            {isFeedVisible ? '🟢 A seção "Nosso Feed do Instagram" está ATIVADA e visível na Home.' : '⚪ A seção "Nosso Feed do Instagram" está DESATIVADA / OCULTA na Home.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleToggleFeedVisibility}
+          style={{
+            background: isFeedVisible ? '#10b981' : '#64748b',
+            color: 'white',
+            border: 'none',
+            borderRadius: '24px',
+            padding: '8px 20px',
+            fontSize: '0.85rem',
+            fontWeight: '700',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          {isFeedVisible ? '✅ Ativado (Visível)' : '❌ Desativado (Oculto)'}
+        </button>
       </div>
 
       <div className="instagram-explanation-card">

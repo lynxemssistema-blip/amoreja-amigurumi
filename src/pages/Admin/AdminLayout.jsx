@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Shield, BookOpen, ShoppingCart, ArrowLeft, MessageSquare, Bot, Layout, Settings, Users, TrendingUp, Tag, HelpCircle, Sparkles } from 'lucide-react';
+import { Shield, BookOpen, ShoppingCart, ArrowLeft, MessageSquare, Bot, Layout, Settings, Users, TrendingUp, Tag, HelpCircle, Sparkles, CreditCard, Mail, Newspaper } from 'lucide-react';
 import Instagram from '../../components/InstagramIcon';
 import './AdminLayout.css';
 
@@ -50,9 +50,15 @@ export default function AdminLayout() {
           <Link to="/admin/instagram-chat" className={`admin-nav-link ${isActive('/admin/instagram-chat')}`}>
             <Instagram size={16} className="ig-pink" /> Central Instagram
           </Link>
+          <Link to="/admin/emails" className={`admin-nav-link ${isActive('/admin/emails')}`}>
+            <Mail size={16} /> Central de E-mails
+          </Link>
           <hr className="admin-sidebar-divider" />
           <Link to="/admin/conteudo" className={`admin-nav-link ${isActive('/admin/conteudo')}`}>
             <Layout size={16} /> Conteúdo do Site
+          </Link>
+          <Link to="/admin/jornal" className={`admin-nav-link ${isActive('/admin/jornal')}`}>
+            <Newspaper size={16} /> Aprovar Jornal
           </Link>
           <Link to="/admin/cupons" className={`admin-nav-link ${isActive('/admin/cupons')}`}>
             <Tag size={16} /> Cupons de Desconto
@@ -62,10 +68,16 @@ export default function AdminLayout() {
           </Link>
           <hr className="admin-sidebar-divider" />
           <Link to="/admin/usuarios" className={`admin-nav-link ${isActive('/admin/usuarios')}`}>
-            <Users size={16} /> Usuários
+            <Users size={16} /> Usuários & Parceiras
+          </Link>
+          <Link to="/parceiro" className="admin-nav-link" style={{ color: '#ea7458', fontWeight: 600 }}>
+            <Sparkles size={16} color="#ea7458" /> 🧵 Canal da Parceira
           </Link>
           <Link to="/admin/whatsapp" className={`admin-nav-link ${isActive('/admin/whatsapp')}`}>
             <MessageSquare size={16} /> WhatsApp Monitor
+          </Link>
+          <Link to="/admin/mercadopago" className={`admin-nav-link ${isActive('/admin/mercadopago')}`}>
+            <CreditCard size={16} /> Mercado Pago
           </Link>
           <Link to="/admin/configuracoes" className={`admin-nav-link ${isActive('/admin/configuracoes')}`}>
             <Settings size={16} /> Configurações Gerais

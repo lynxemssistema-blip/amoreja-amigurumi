@@ -9,6 +9,15 @@ CREATE TABLE IF NOT EXISTS public.New_Amoreja_profiles (
     email TEXT NOT NULL,
     full_name TEXT,
     is_admin BOOLEAN DEFAULT FALSE,
+    role TEXT DEFAULT 'client', -- 'admin' | 'partner' | 'client'
+    partner_status TEXT DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
+    partner_bio TEXT,
+    partner_pix_key TEXT,
+    partner_bank_name TEXT,
+    partner_mp_access_token TEXT,
+    partner_mp_public_key TEXT,
+    partner_default_commission_pct NUMERIC(5, 2) DEFAULT 70.00,
+    user_tags TEXT[] DEFAULT '{}', -- ['maratonista', 'colunista', etc]
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -24,6 +33,12 @@ CREATE TABLE IF NOT EXISTS public.New_Amoreja_products (
     pdf_path TEXT, -- Caminho do arquivo no Supabase Storage
     image_url TEXT, -- Imagem de capa
     difficulty TEXT DEFAULT 'Médio',
+    payment_type TEXT DEFAULT 'automatic', -- 'automatic' (checkout API da loja) ou 'mp_link' (link direto Mercado Pago)
+    mp_payment_link TEXT, -- Link direto/botão do Mercado Pago (ex: https://mpago.la/...)
+    partner_id UUID REFERENCES public.New_Amoreja_profiles(id) ON DELETE SET NULL, -- ID da Parceira Autora
+    approval_status TEXT DEFAULT 'approved', -- 'pending' | 'approved' | 'rejected'
+    partner_commission_pct NUMERIC(5, 2) DEFAULT 70.00, -- Percentual de comissão da parceira
+    rejection_reason TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -162,6 +177,74 @@ CREATE POLICY "Apenas administradores podem gerenciar configurações"
         )
     );
 
+-- ==========================================
+-- TABELAS DO JORNAL
+-- ==========================================
+
+-- 7. Tabela de Matérias do Jornal
+CREATE TABLE IF NOT EXISTS public.New_Amoreja_journal_articles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    content TEXT NOT NULL,
+    cover_image TEXT,
+    layout_model TEXT DEFAULT 'classic',
+    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    author_id UUID NOT NULL REFERENCES public.New_Amoreja_profiles(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'archived')),
+    social_links JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.New_Amoreja_journal_articles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Qualquer um pode ler materias ativas"
+    ON public.New_Amoreja_journal_articles FOR SELECT USING (status = 'approved');
+
+CREATE POLICY "Autores podem ler proprias materias"
+    ON public.New_Amoreja_journal_articles FOR SELECT USING (author_id = auth.uid());
+
+CREATE POLICY "Autores podem inserir materias"
+    ON public.New_Amoreja_journal_articles FOR INSERT WITH CHECK (author_id = auth.uid());
+
+CREATE POLICY "Admin acesso total materias"
+    ON public.New_Amoreja_journal_articles FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.New_Amoreja_profiles
+            WHERE New_Amoreja_profiles.id = auth.uid() AND New_Amoreja_profiles.is_admin = true
+        )
+    );
+
+-- 8. Tabela de Eventos do Jornal
+CREATE TABLE IF NOT EXISTS public.New_Amoreja_journal_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    event_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    author_id UUID NOT NULL REFERENCES public.New_Amoreja_profiles(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    social_links JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.New_Amoreja_journal_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Qualquer um pode ler eventos aprovados"
+    ON public.New_Amoreja_journal_events FOR SELECT USING (status = 'approved');
+
+CREATE POLICY "Autores podem ler proprios eventos"
+    ON public.New_Amoreja_journal_events FOR SELECT USING (author_id = auth.uid());
+
+CREATE POLICY "Autores podem inserir eventos"
+    ON public.New_Amoreja_journal_events FOR INSERT WITH CHECK (author_id = auth.uid());
+
+CREATE POLICY "Admin acesso total eventos"
+    ON public.New_Amoreja_journal_events FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.New_Amoreja_profiles
+            WHERE New_Amoreja_profiles.id = auth.uid() AND New_Amoreja_profiles.is_admin = true
+        )
+    );
 
 -- ==========================================
 -- GATILHOS (TRIGGERS) AUTOMÁTICOS
