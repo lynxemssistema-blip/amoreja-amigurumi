@@ -57,22 +57,79 @@ const formatJid = (jid = '') => {
   return n.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '+55 ($1) $2-$3') || n;
 };
 
+const mediaBase64Cache = new Map();
+const failedMediaIds = new Set();
+const failedAvatars = new Set();
+
+const isExpiredWhatsAppUrl = (url) => {
+  if (!url || typeof url !== 'string') return true;
+  try {
+    const parsed = new URL(url);
+    const oe = parsed.searchParams.get('oe');
+    if (oe && /^[0-9a-fA-F]+$/.test(oe)) {
+      if (parseInt(oe, 16) * 1000 < Date.now()) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
+
 // ─── MediaBubble ─────────────────────────────────────────────────────────────
 const MediaBubble = ({ msgRaw, messageId }) => {
   const [mediaData, setMediaData] = useState(null);
   const [rawBase64, setRawBase64] = useState(null);
   const [mimeType, setMimeType] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mediaExpired, setMediaExpired] = useState(false);
   const [transcription, setTranscription] = useState(null);
   const [transcribing, setTranscribing] = useState(false);
   const [usedModel, setUsedModel] = useState(null);
+
+  const msgObj = msgRaw?.message || {};
+  const mediaObj =
+    msgObj.audioMessage ||
+    msgObj.videoMessage ||
+    msgObj.imageMessage ||
+    msgObj.documentMessage ||
+    msgObj.stickerMessage ||
+    null;
+  const mediaExpiredByUrl = mediaObj?.url ? isExpiredWhatsAppUrl(mediaObj.url) : false;
 
   // Carregar mídia + verificar se já tem transcrição salva
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        // 1. Carregar mídia
+        // 1. Verificar transcrição salva no Supabase (apenas se for áudio)
+        if (msgObj.audioMessage && messageId && isSupabaseConfigured()) {
+          const { data } = await supabase
+            .from('new_amoreja_wa_transcriptions')
+            .select('transcription')
+            .eq('message_id', messageId)
+            .maybeSingle();
+          if (alive && data?.transcription) {
+            setTranscription(data.transcription);
+            setUsedModel('salvo');
+          }
+        }
+
+        // 2. Evitar requisições 400 para mídias já expiradas no CDN do WhatsApp ou em cache
+        if (messageId && mediaBase64Cache.has(messageId)) {
+          const cached = mediaBase64Cache.get(messageId);
+          if (alive && cached) {
+            setMediaData(cached.dataUrl);
+            setRawBase64(cached.base64);
+            setMimeType(cached.mimetype);
+          }
+          return;
+        }
+
+        if (mediaExpiredByUrl || (messageId && failedMediaIds.has(messageId))) {
+          if (alive) setMediaExpired(true);
+          return;
+        }
+
         const res = await fetch(`${EVO_URL}/chat/getBase64FromMediaMessage/${EVO_INSTANCE}`, {
           method: 'POST',
           headers: { 'apikey': EVO_API_KEY, 'Content-Type': 'application/json' },
@@ -81,29 +138,27 @@ const MediaBubble = ({ msgRaw, messageId }) => {
         if (res.ok) {
           const d = await res.json();
           if (alive && d.base64) {
-            setMediaData(`data:${d.mimetype};base64,${d.base64}`);
+            const dataUrl = `data:${d.mimetype};base64,${d.base64}`;
+            if (messageId) {
+              mediaBase64Cache.set(messageId, { dataUrl, base64: d.base64, mimetype: d.mimetype });
+            }
+            setMediaData(dataUrl);
             setRawBase64(d.base64);
             setMimeType(d.mimetype);
           }
+        } else {
+          if (messageId) failedMediaIds.add(messageId);
+          if (alive) setMediaExpired(true);
         }
-
-        // 2. Verificar transcrição salva no Supabase
-        if (messageId && isSupabaseConfigured()) {
-          const { data } = await supabase
-            .from('new_amoreja_wa_transcriptions')
-            .select('transcription, model_used')
-            .eq('message_id', messageId)
-            .maybeSingle();
-          if (alive && data?.transcription) {
-            setTranscription(data.transcription);
-            setUsedModel(data.model_used || 'salvo');
-          }
-        }
-      } catch (e) { console.error('Erro mídia:', e); }
-      finally { if (alive) setLoading(false); }
+      } catch (e) {
+        if (messageId) failedMediaIds.add(messageId);
+        if (alive) setMediaExpired(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
     return () => { alive = false; };
-  }, [msgRaw, messageId]);
+  }, [msgRaw, messageId, mediaExpiredByUrl]);
 
   const handleTranscribe = async () => {
     if (!rawBase64 || !mimeType) return;
@@ -157,7 +212,6 @@ const MediaBubble = ({ msgRaw, messageId }) => {
         supabase.from('new_amoreja_wa_transcriptions').upsert({
           message_id: messageId,
           transcription: text,
-          model_used: modelUsed,
           created_at: new Date().toISOString()
         }, { onConflict: 'message_id' }).then();
       }
@@ -169,7 +223,18 @@ const MediaBubble = ({ msgRaw, messageId }) => {
   };
 
   if (loading) return <div className="wa-media-loading"><RefreshCw size={14} className="fa-spin" /> Carregando...</div>;
-  if (!mediaData) return <div className="wa-media-error">Erro ao carregar mídia</div>;
+  if (!mediaData) {
+    const thumb = msgObj?.imageMessage?.jpegThumbnail || msgObj?.videoMessage?.jpegThumbnail || msgObj?.stickerMessage?.jpegThumbnail;
+    if (thumb) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <img src={`data:image/jpeg;base64,${thumb}`} alt="Miniatura" style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '7px', display: 'block' }} />
+          {mediaExpired && <span style={{ fontSize: '11px', color: '#667781' }}>Mídia completa expirada no servidor do WhatsApp</span>}
+        </div>
+      );
+    }
+    return <div className="wa-media-error">{mediaExpired ? 'Mídia antiga expirada no WhatsApp' : 'Erro ao carregar mídia'}</div>;
+  }
 
   if (msgRaw.message?.audioMessage) {
     return (
@@ -194,22 +259,6 @@ const MediaBubble = ({ msgRaw, messageId }) => {
   }
 
   return <img src={mediaData} alt="Mídia" style={{ maxWidth: '100%', maxHeight: '280px', borderRadius: '7px', display: 'block' }} />;
-};
-
-const failedAvatars = new Set();
-
-const isExpiredWhatsAppUrl = (url) => {
-  if (!url || typeof url !== 'string') return true;
-  try {
-    const parsed = new URL(url);
-    const oe = parsed.searchParams.get('oe');
-    if (oe && /^[0-9a-fA-F]+$/.test(oe)) {
-      if (parseInt(oe, 16) * 1000 < Date.now()) return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
 };
 
 // ─── Avatar ──────────────────────────────────────────────────────────────────

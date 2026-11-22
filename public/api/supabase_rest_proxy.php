@@ -1,8 +1,9 @@
 <?php
 // Proxy transparente seguro para Supabase REST (Hostinger)
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, apikey, prefer, range, x-client-info');
+header('Access-Control-Allow-Methods: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, apikey, prefer, range, x-client-info, accept-profile, content-profile');
+header('Access-Control-Expose-Headers: Content-Range, Preference-Applied');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -33,6 +34,9 @@ $headers[] = 'Host: supabase-supabaseamoreja.1cnep6.easypanel.host';
 
 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $_SERVER['REQUEST_METHOD']);
+if ($_SERVER['REQUEST_METHOD'] === 'HEAD') {
+    curl_setopt($ch, CURLOPT_NOBODY, true);
+}
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);

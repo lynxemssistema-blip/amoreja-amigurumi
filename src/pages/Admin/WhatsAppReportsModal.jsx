@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 import { callGeminiChat, callGeminiPrompt } from '../../services/geminiService';
+import { fetchArchivedMessagesForReport } from '../../services/marciaArchiveService';
 
 const LOCAL_HISTORY_KEY = 'amoreja_wa_reports_agent_history_v1';
 const REPORT_AGENT_CHANNEL = 'whatsapp_reports_agent';
@@ -193,9 +194,13 @@ export default function WhatsAppReportsModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedType, setCopiedType] = useState(null);
 
-  // Carregamento multi-conversa via Evolution API quando há seleção múltipla
+  // Carregamento completo via arquivo Supabase (com fallback Evolution API para multi-conversa)
   const [multiChatMessages, setMultiChatMessages] = useState([]);
   const [loadingMultiChats, setLoadingMultiChats] = useState(false);
+  const [archivedReportMessages, setArchivedReportMessages] = useState([]);
+  const [loadingArchivedReport, setLoadingArchivedReport] = useState(false);
+  const [archiveSearchTerm, setArchiveSearchTerm] = useState('');
+  const [debouncedArchiveSearch, setDebouncedArchiveSearch] = useState('');
 
   // Análise rápida na aba Resumo
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -225,73 +230,102 @@ export default function WhatsAppReportsModal({
     ? `selected:${selectedChatJids.slice(0, 5).join(',')}`
     : activeChat?.remoteJid || 'all';
 
-  // Carregar mensagens reais quando múltiplas conversas estão marcadas
   useEffect(() => {
-    if (!isOpen || selectedChatJids.length === 0 || !apiUrl || !apiKey || !instanceName) {
+    const t = setTimeout(() => setDebouncedArchiveSearch(archiveSearchTerm.trim()), 400);
+    return () => clearTimeout(t);
+  }, [archiveSearchTerm]);
+
+  // Carregar histórico completo do arquivo Supabase (ou fallback Evolution API se banco vazio)
+  useEffect(() => {
+    if (!isOpen) {
       setMultiChatMessages([]);
+      setArchivedReportMessages([]);
       return;
     }
 
     let alive = true;
     (async () => {
-      setLoadingMultiChats(true);
+      setLoadingArchivedReport(true);
+      setLoadingMultiChats(selectedChatJids.length > 0);
       try {
-        const targetJids = selectedChatJids.slice(0, 10);
-        const chatMap = new Map(allChats.map((c) => [c.remoteJid, c.name || c.remoteJid]));
-        const aggregated = [];
+        const dbMsgs = await fetchArchivedMessagesForReport({
+          selectedChatJids,
+          activeChat,
+          allChats,
+          searchKeyword: debouncedArchiveSearch,
+          limit: selectedChatJids.length > 0 ? 2500 : 1500
+        });
 
-        // Busca em lotes paralelos de 4 para não sobrecarregar a Evolution API
-        for (let i = 0; i < targetJids.length; i += 4) {
-          const chunk = targetJids.slice(i, i + 4);
-          const results = await Promise.all(
-            chunk.map(async (remoteJid) => {
-              try {
-                const res = await fetch(`${apiUrl}/chat/findMessages/${instanceName}`, {
-                  method: 'POST',
-                  headers: { apikey: apiKey, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ where: { key: { remoteJid } }, limit: 60 })
-                });
-                const raw = await safeJsonParse(res, []);
-                const msgs = Array.isArray(raw) ? raw : (raw?.messages?.records || raw?.records || []);
-                const chatName = chatMap.get(remoteJid) || remoteJid;
-                const parsed = [];
-                for (const m of msgs) {
-                  const ts = m.messageTimestamp?.low || m.messageTimestamp;
-                  if (!ts) continue;
-                  const txt = m.message?.conversation || m.message?.extendedTextMessage?.text;
-                  const hasMedia = m.message?.imageMessage || m.message?.audioMessage || m.message?.videoMessage || m.message?.documentMessage || m.message?.stickerMessage;
-                  if (!txt && !hasMedia) continue;
-                  parsed.push({
-                    id: m.key?.id || `${remoteJid}-${ts}`,
-                    content: txt || '',
-                    from_me: Boolean(m.key?.fromMe),
-                    sender_name: m.pushName || (m.key?.fromMe ? 'Márcia' : chatName),
-                    sender_jid: m.key?.participant || m.key?.remoteJid || remoteJid,
-                    created_at: new Date(Number(ts) * 1000).toISOString(),
-                    raw_message: hasMedia ? m : null,
-                    message_type: m.message?.imageMessage ? 'image' : m.message?.videoMessage ? 'video' : m.message?.audioMessage ? 'audio' : m.message?.documentMessage ? 'document' : 'text',
-                    chatName,
-                    remoteJid
-                  });
-                }
-                return parsed;
-              } catch {
-                return [];
-              }
-            })
-          );
-          results.forEach((arr) => aggregated.push(...arr));
+        if (!alive) return;
+
+        if (dbMsgs.length > 0) {
+          setArchivedReportMessages(dbMsgs);
+          if (selectedChatJids.length > 0) setMultiChatMessages(dbMsgs);
+          return;
         }
 
-        aggregated.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        if (alive) setMultiChatMessages(aggregated);
+        setArchivedReportMessages([]);
+
+        if (selectedChatJids.length > 0 && apiUrl && apiKey && instanceName) {
+          const targetJids = selectedChatJids.slice(0, 10);
+          const chatMap = new Map(allChats.map((c) => [c.remoteJid, c.name || c.remoteJid]));
+          const aggregated = [];
+
+          for (let i = 0; i < targetJids.length; i += 4) {
+            const chunk = targetJids.slice(i, i + 4);
+            const results = await Promise.all(
+              chunk.map(async (remoteJid) => {
+                try {
+                  const res = await fetch(`${apiUrl}/chat/findMessages/${instanceName}`, {
+                    method: 'POST',
+                    headers: { apikey: apiKey, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ where: { key: { remoteJid } }, limit: 60 })
+                  });
+                  const raw = await safeJsonParse(res, []);
+                  const msgs = Array.isArray(raw) ? raw : (raw?.messages?.records || raw?.records || []);
+                  const chatName = chatMap.get(remoteJid) || remoteJid;
+                  const parsed = [];
+                  for (const m of msgs) {
+                    const ts = m.messageTimestamp?.low || m.messageTimestamp;
+                    if (!ts) continue;
+                    const txt = m.message?.conversation || m.message?.extendedTextMessage?.text;
+                    const hasMedia = m.message?.imageMessage || m.message?.audioMessage || m.message?.videoMessage || m.message?.documentMessage || m.message?.stickerMessage;
+                    if (!txt && !hasMedia) continue;
+                    parsed.push({
+                      id: m.key?.id || `${remoteJid}-${ts}`,
+                      content: txt || '',
+                      from_me: Boolean(m.key?.fromMe),
+                      sender_name: m.pushName || (m.key?.fromMe ? 'Márcia' : chatName),
+                      sender_jid: m.key?.participant || m.key?.remoteJid || remoteJid,
+                      created_at: new Date(Number(ts) * 1000).toISOString(),
+                      raw_message: hasMedia ? m : null,
+                      message_type: m.message?.imageMessage ? 'image' : m.message?.videoMessage ? 'video' : m.message?.audioMessage ? 'audio' : m.message?.documentMessage ? 'document' : 'text',
+                      chatName,
+                      remoteJid
+                    });
+                  }
+                  return parsed;
+                } catch {
+                  return [];
+                }
+              })
+            );
+            results.forEach((arr) => aggregated.push(...arr));
+          }
+
+          aggregated.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          if (alive) setMultiChatMessages(aggregated);
+        }
       } finally {
-        if (alive) setLoadingMultiChats(false);
+        if (alive) {
+          setLoadingArchivedReport(false);
+          setLoadingMultiChats(false);
+        }
       }
     })();
 
     return () => { alive = false; };
-  }, [isOpen, selectedChatJids, allChats, apiUrl, apiKey, instanceName]);
+  }, [isOpen, selectedChatJids, activeChat, allChats, apiUrl, apiKey, instanceName, debouncedArchiveSearch]);
 
   // Hidratar histórico persistente do Bate-Papo (localStorage + Supabase) ao abrir o modal
   useEffect(() => {
@@ -420,18 +454,25 @@ export default function WhatsAppReportsModal({
     }
   }, [isOpen, activeTab, currentSession?.messages?.length, sendingChat]);
 
-  // Mensagens em análise (multi-conversa carregada OU conversa ativa)
+  // Mensagens em análise (multi-conversa, conversa ativa completa ou histórico global do arquivo)
   const analyzedMessages = useMemo(() => {
     if (!isOpen) return [];
     if (selectedChatJids.length > 0) {
-      if (multiChatMessages.length > 0) return multiChatMessages;
+      return archivedReportMessages.length > 0 ? archivedReportMessages : multiChatMessages;
     }
-    return activeMessages.map((m) => ({
-      ...m,
-      chatName: activeChat?.name || 'Conversa',
-      remoteJid: activeChat?.remoteJid || ''
-    }));
-  }, [isOpen, activeChat, activeMessages, selectedChatJids, multiChatMessages]);
+    if (activeChat?.remoteJid) {
+      if (debouncedArchiveSearch) return archivedReportMessages;
+      if (archivedReportMessages.length > activeMessages.length) {
+        return archivedReportMessages;
+      }
+      return activeMessages.map((m) => ({
+        ...m,
+        chatName: activeChat?.name || 'Conversa',
+        remoteJid: activeChat?.remoteJid || ''
+      }));
+    }
+    return archivedReportMessages;
+  }, [isOpen, activeChat, activeMessages, selectedChatJids, multiChatMessages, archivedReportMessages, debouncedArchiveSearch]);
 
   // 1. EXTRAÇÃO DE INSTAGRAM E REDES SOCIAIS
   const extractedInstagram = useMemo(() => {
@@ -675,7 +716,7 @@ export default function WhatsAppReportsModal({
           ? new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
           : '';
         const who = m.sender_name || (m.from_me ? 'Márcia' : m.chatName || 'Cliente');
-        const chatTag = selectedChatJids.length > 0 && m.chatName ? ` (${m.chatName})` : '';
+        const chatTag = (selectedChatJids.length > 0 || !activeChat) && m.chatName ? ` (${m.chatName})` : '';
         const mediaTag = m.message_type && m.message_type !== 'text' ? `[Mídia:${m.message_type}] ` : '';
         return `[${dt}] ${who}${chatTag}: ${mediaTag}${m.content || ''}`.trim();
       })
@@ -1005,7 +1046,7 @@ ${sampleTexts || 'Nenhuma mensagem recente encontrada.'}`;
               <h2 className="wab-report-title">Central de Inteligência & Relatórios WhatsApp</h2>
               <p className="wab-report-subtitle">
                 Converse com o Agente IA, extraia Instagrams, leads e biblioteca de mídias • <strong>{targetScope}</strong>
-                {loadingMultiChats ? ' (carregando mensagens selecionadas...)' : ''}
+                {loadingMultiChats || loadingArchivedReport ? ' (carregando histórico completo...)' : ''}
               </p>
             </div>
           </div>
@@ -1174,22 +1215,45 @@ ${sampleTexts || 'Nenhuma mensagem recente encontrada.'}`;
                     </div>
                   </div>
 
-                  {/* Seletor de Modo/Custo do Agente */}
-                  <div className="wab-mode-toggle" title="Escolha o equilíbrio entre custo mínimo e profundidade">
-                    <button
-                      type="button"
-                      className={`wab-mode-btn ${agentMode === 'economy' ? 'active' : ''}`}
-                      onClick={() => setAgentMode('economy')}
-                    >
-                      ⚡ Econômico
-                    </button>
-                    <button
-                      type="button"
-                      className={`wab-mode-btn ${agentMode === 'deep' ? 'active' : ''}`}
-                      onClick={() => setAgentMode('deep')}
-                    >
-                      🧠 Profundo
-                    </button>
+                  {/* Filtro rápido no arquivo completo + Seletor de Modo/Custo */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <div className="wab-archive-search-box" title="Filtrar mensagens em todo o arquivo salvo antes de enviar ao agente">
+                      <Search size={13} color="#667781" />
+                      <input
+                        type="text"
+                        value={archiveSearchTerm}
+                        onChange={(e) => setArchiveSearchTerm(e.target.value)}
+                        placeholder="Filtrar no histórico..."
+                        className="wab-archive-search-input"
+                      />
+                      {archiveSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setArchiveSearchTerm('')}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#667781', padding: 0, display: 'flex' }}
+                          title="Limpar filtro"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="wab-mode-toggle" title="Escolha o equilíbrio entre custo mínimo e profundidade">
+                      <button
+                        type="button"
+                        className={`wab-mode-btn ${agentMode === 'economy' ? 'active' : ''}`}
+                        onClick={() => setAgentMode('economy')}
+                      >
+                        ⚡ Econômico
+                      </button>
+                      <button
+                        type="button"
+                        className={`wab-mode-btn ${agentMode === 'deep' ? 'active' : ''}`}
+                        onClick={() => setAgentMode('deep')}
+                      >
+                        🧠 Profundo
+                      </button>
+                    </div>
                   </div>
                 </div>
 

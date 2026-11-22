@@ -47,10 +47,22 @@ import {
   CheckSquare,
   SlidersHorizontal,
   Layers,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Clock
 } from 'lucide-react';
 import WhatsAppConnectionModal from '../../components/WhatsAppConnectionModal';
 import WhatsAppReportsModal from './WhatsAppReportsModal';
+import {
+  fetchAllArchivedMarciaChats,
+  fetchArchiveTotalMessagesCount,
+  fetchArchivedMessagesForChat,
+  syncLatestMessagesForSingleChat,
+  syncMarciaFullHistoryInApp,
+  upsertMarciaMessagesBatch,
+  upsertMarciaChatsBatch,
+  extractWaMessageRow,
+  formatMarciaJid
+} from '../../services/marciaArchiveService';
 import './WhatsAppWebMarcia.css';
 
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
@@ -132,6 +144,25 @@ const formatMessageTime = (dateString) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+// Cache global em memória de mídias já baixadas / falhas e checagem de URL expirada
+const mediaBase64Cache = new Map();
+const failedMediaIds = new Set();
+const failedAvatars = new Set();
+
+const isExpiredWhatsAppUrl = (url) => {
+  if (!url || typeof url !== 'string') return true;
+  try {
+    const parsed = new URL(url);
+    const oe = parsed.searchParams.get('oe');
+    if (oe && /^[0-9a-fA-F]+$/.test(oe)) {
+      if (parseInt(oe, 16) * 1000 < Date.now()) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
+
 // ── COMPONENTE DE MÍDIA COMPLETO DO WHATSAPP (ÁUDIO, VÍDEO, IMAGEM, DOCUMENTO) ──
 const WhatsAppMediaMessage = ({ 
   rawMessage, 
@@ -146,6 +177,8 @@ const WhatsAppMediaMessage = ({
   const [rawBase64, setRawBase64] = useState(null);
   const [mimeType, setMimeType] = useState(null);
   const [loadingMedia, setLoadingMedia] = useState(false);
+  const [mediaExpired, setMediaExpired] = useState(false);
+  const aliveRef = useRef(true);
   
   // Áudio Player com scrubber e velocidades
   const [isPlaying, setIsPlaying] = useState(false);
@@ -165,6 +198,9 @@ const WhatsAppMediaMessage = ({
   const docMsg = rawMessage?.message?.documentMessage;
   const stickerMsg = rawMessage?.message?.stickerMessage;
 
+  const mediaObj = audioMsg || videoMsg || imageMsg || docMsg || stickerMsg || null;
+  const mediaExpiredByUrl = mediaObj?.url ? isExpiredWhatsAppUrl(mediaObj.url) : false;
+
   // Imagem base64 do thumbnail já embutida no payload WhatsApp
   const thumbBase64 = videoMsg?.jpegThumbnail || imageMsg?.jpegThumbnail || stickerMsg?.jpegThumbnail;
   const initialThumbSrc = thumbBase64 ? `data:image/jpeg;base64,${thumbBase64}` : null;
@@ -182,56 +218,89 @@ const WhatsAppMediaMessage = ({
     return heights;
   }, [messageId, audioMsg]);
 
-  // Buscar stream de alta resolução via Evolution API quando disponível
+  const fetchMediaFromEvolution = async (force = false) => {
+    if (!rawMessage) return;
+
+    if (!force && messageId && mediaBase64Cache.has(messageId)) {
+      const cached = mediaBase64Cache.get(messageId);
+      if (aliveRef.current && cached) {
+        setMediaData(cached.dataUrl);
+        setRawBase64(cached.base64);
+        setMimeType(cached.mimetype);
+        setMediaExpired(false);
+      }
+      return;
+    }
+
+    if (!force && (mediaExpiredByUrl || (messageId && failedMediaIds.has(messageId)))) {
+      if (aliveRef.current) setMediaExpired(true);
+      return;
+    }
+
+    try {
+      if (aliveRef.current) {
+        setLoadingMedia(true);
+        setMediaExpired(false);
+      }
+      const res = await fetch(`${EVO_MARCIA_URL}/chat/getBase64FromMediaMessage/${EVO_MARCIA_INSTANCE}`, {
+        method: 'POST',
+        headers: { 'apikey': EVO_MARCIA_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: rawMessage })
+      });
+
+      if (res.ok) {
+        const d = await safeJson(res, null);
+        if (aliveRef.current && d?.base64) {
+          const dataUrl = `data:${d.mimetype};base64,${d.base64}`;
+          if (messageId) {
+            mediaBase64Cache.set(messageId, { dataUrl, base64: d.base64, mimetype: d.mimetype });
+            failedMediaIds.delete(messageId);
+          }
+          setMediaData(dataUrl);
+          setRawBase64(d.base64);
+          setMimeType(d.mimetype);
+          setMediaExpired(false);
+        }
+      } else {
+        if (messageId) failedMediaIds.add(messageId);
+        if (aliveRef.current) setMediaExpired(true);
+      }
+    } catch {
+      if (messageId) failedMediaIds.add(messageId);
+      if (aliveRef.current) setMediaExpired(true);
+    } finally {
+      if (aliveRef.current) setLoadingMedia(false);
+    }
+  };
+
+  // Buscar transcrição salva e stream de mídia quando não expirado
   useEffect(() => {
-    let alive = true;
+    aliveRef.current = true;
     (async () => {
-      // 1. Verificar transcrição existente no Supabase para áudios
       if (audioMsg && messageId && isSupabaseConfigured()) {
         try {
           const { data } = await supabase
             .from('new_amoreja_wa_transcriptions')
-            .select('transcription, model_used')
+            .select('transcription')
             .eq('message_id', messageId)
             .maybeSingle();
-          if (alive && data?.transcription) {
+          if (aliveRef.current && data?.transcription) {
             setTranscription(data.transcription);
-            setUsedModel(data.model_used || 'salvo');
+            setUsedModel('salvo');
           }
         } catch (_) {}
       }
 
-      // 2. Buscar mídia completa
-      try {
-        setLoadingMedia(true);
-        const res = await fetch(`${EVO_MARCIA_URL}/chat/getBase64FromMediaMessage/${EVO_MARCIA_INSTANCE}`, {
-          method: 'POST',
-          headers: { 'apikey': EVO_MARCIA_API_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: rawMessage })
-        });
-
-        if (res.ok) {
-          const d = await safeJson(res, null);
-          if (alive && d?.base64) {
-            setMediaData(`data:${d.mimetype};base64,${d.base64}`);
-            setRawBase64(d.base64);
-            setMimeType(d.mimetype);
-          }
-        }
-      } catch (err) {
-        // Fallback natural para thumbnails
-      } finally {
-        if (alive) setLoadingMedia(false);
-      }
+      await fetchMediaFromEvolution(false);
     })();
 
-    return () => { alive = false; };
-  }, [rawMessage, messageId]);
+    return () => { aliveRef.current = false; };
+  }, [rawMessage, messageId, mediaExpiredByUrl]);
 
   // Transcrição de áudio inteligente com Gemini AI
   const handleTranscribeAudio = async () => {
     if (!rawBase64 && !mediaData) {
-      alert('Aguarde o áudio carregar completamente para transcrever.');
+      alert(mediaExpired ? 'Este áudio antigo expirou no servidor do WhatsApp e não está disponível para download.' : 'Aguarde o áudio carregar completamente para transcrever.');
       return;
     }
     setTranscribing(true);
@@ -286,7 +355,6 @@ const WhatsAppMediaMessage = ({
         supabase.from('new_amoreja_wa_transcriptions').upsert({
           message_id: messageId,
           transcription: text,
-          model_used: modelUsed,
           created_at: new Date().toISOString()
         }, { onConflict: 'message_id' }).then();
       }
@@ -364,8 +432,8 @@ const WhatsAppMediaMessage = ({
                 type="button" 
                 className="wab-audio-play-circle"
                 onClick={togglePlayAudio}
-                disabled={!mediaData && loadingMedia}
-                title={isPlaying ? "Pausar áudio" : "Tocar mensagem de voz"}
+                disabled={!mediaData}
+                title={isPlaying ? "Pausar áudio" : (mediaExpired && !mediaData ? "Áudio expirado no WhatsApp" : "Tocar mensagem de voz")}
               >
                 {loadingMedia && !mediaData ? (
                   <RefreshCw size={15} className="fa-spin" />
@@ -420,8 +488,17 @@ const WhatsAppMediaMessage = ({
           </div>
         </div>
 
-        {/* Botão de Transcrição IA */}
-        {!transcription ? (
+        {/* Status de mídia antiga / Botão de Transcrição IA */}
+        {mediaExpired && !mediaData && (
+          <div className="wab-media-expired-pill">
+            <span>Áudio antigo expirado no WhatsApp</span>
+            <button type="button" onClick={() => fetchMediaFromEvolution(true)} className="wab-media-retry-btn">
+              Tentar baixar
+            </button>
+          </div>
+        )}
+
+        {(mediaData || transcription) && (!transcription ? (
           <button 
             type="button"
             className="wab-transcribe-btn"
@@ -438,7 +515,7 @@ const WhatsAppMediaMessage = ({
             </span>
             {transcription}
           </div>
-        )}
+        ))}
       </div>
     );
   }
@@ -495,6 +572,14 @@ const WhatsAppMediaMessage = ({
             {videoMsg.caption}
           </div>
         )}
+        {mediaExpired && !mediaData && (
+          <div className="wab-media-expired-pill">
+            <span>Vídeo expirado no WhatsApp</span>
+            <button type="button" onClick={() => fetchMediaFromEvolution(true)} className="wab-media-retry-btn">
+              Tentar baixar
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -530,6 +615,14 @@ const WhatsAppMediaMessage = ({
             {imageMsg.caption}
           </div>
         )}
+        {mediaExpired && !mediaData && (
+          <div className="wab-media-expired-pill">
+            <span>{imgSrc ? 'Miniatura (foto original expirada)' : 'Foto antiga expirada no WhatsApp'}</span>
+            <button type="button" onClick={() => fetchMediaFromEvolution(true)} className="wab-media-retry-btn">
+              Tentar baixar
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -549,7 +642,7 @@ const WhatsAppMediaMessage = ({
             a.download = fileName;
             a.click();
           } else {
-            alert('Aguarde o download do documento...');
+            fetchMediaFromEvolution(true);
           }
         }}
       >
@@ -558,7 +651,9 @@ const WhatsAppMediaMessage = ({
         </div>
         <div className="wab-doc-info">
           <span className="wab-doc-name" title={fileName}>{fileName}</span>
-          <span className="wab-doc-size">{fileSize} • Clique para baixar</span>
+          <span className="wab-doc-size">
+            {fileSize} • {mediaExpired && !mediaData ? 'Expirado • Clique para tentar baixar' : 'Clique para baixar'}
+          </span>
         </div>
         <Download size={18} color="#008069" style={{ flexShrink: 0 }} />
       </div>
@@ -580,23 +675,6 @@ const WhatsAppMediaMessage = ({
   }
 
   return null;
-};
-
-// Cache global de avatares com falha (evita requisições 403 Forbidden / 404 repetidas)
-const failedAvatars = new Set();
-
-const isExpiredWhatsAppUrl = (url) => {
-  if (!url || typeof url !== 'string') return true;
-  try {
-    const parsed = new URL(url);
-    const oe = parsed.searchParams.get('oe');
-    if (oe && /^[0-9a-fA-F]+$/.test(oe)) {
-      if (parseInt(oe, 16) * 1000 < Date.now()) return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
 };
 
 // ── AVATAR ──────────────────────────────────────────────────────────────────
@@ -662,6 +740,12 @@ export default function WhatsAppWebMarcia() {
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [totalArchivedMessages, setTotalArchivedMessages] = useState(0);
+  const [visibleChatsCount, setVisibleChatsCount] = useState(150);
+  const [chatTotalMessages, setChatTotalMessages] = useState(0);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [fullSyncProgress, setFullSyncProgress] = useState(null);
   
   // Anexos e Menus
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
@@ -697,6 +781,10 @@ export default function WhatsAppWebMarcia() {
   const messagesEndRef = useRef(null);
   const chatFeedRef = useRef(null);
   const selectedItemRef = useRef(null);
+  const shouldScrollToBottomRef = useRef(true);
+  const archivedLoadedCountRef = useRef(0);
+  const activeLoadJidRef = useRef(null);
+  const fullSyncAbortRef = useRef(null);
   const fileInputImgRef = useRef(null);
   const fileInputVideoRef = useRef(null);
   const fileInputDocRef = useRef(null);
@@ -766,7 +854,9 @@ export default function WhatsAppWebMarcia() {
         ...prev,
         state,
         number: inst?.number || prev.number,
-        profileName: inst?.profileName || prev.profileName
+        profileName: inst?.profileName || prev.profileName,
+        totalChats: inst?._count?.Chat || prev.totalChats,
+        totalContacts: inst?._count?.Contact || prev.totalContacts
       }));
     } catch (e) {
       console.warn('Erro ao consultar status da instância Márcia:', e.message);
@@ -776,7 +866,14 @@ export default function WhatsAppWebMarcia() {
   useEffect(() => {
     loadAllChats();
     checkConnectionStatus();
+    return () => {
+      fullSyncAbortRef.current?.abort();
+    };
   }, []);
+
+  useEffect(() => {
+    setVisibleChatsCount(150);
+  }, [searchQuery, filterType]);
 
   useEffect(() => {
     if (selectedJid) {
@@ -793,16 +890,29 @@ export default function WhatsAppWebMarcia() {
   }, [selectedJid]);
 
   useEffect(() => {
+    if (!shouldScrollToBottomRef.current) return;
     const feed = chatFeedRef.current;
     if (feed) {
       feed.scrollTop = feed.scrollHeight;
     }
   }, [waMessages, aiMessages, loadingMessages]);
 
-  // Carregar todas as conversas do WhatsApp da Márcia
+  // Carregar TODAS as conversas do arquivo Supabase e mesclar atualizações ao vivo da Evolution API
   const loadAllChats = async () => {
     setLoadingChats(true);
     try {
+      const [archivedChats, totalMsgs] = await Promise.all([
+        fetchAllArchivedMarciaChats(),
+        fetchArchiveTotalMessagesCount()
+      ]);
+
+      if (totalMsgs > 0) {
+        setTotalArchivedMessages(totalMsgs);
+      }
+      if (archivedChats.length > 0) {
+        setChats(archivedChats);
+      }
+
       const res = await fetch(`${EVO_MARCIA_URL}/chat/findChats/${EVO_MARCIA_INSTANCE}`, {
         method: 'POST',
         headers: { 'apikey': EVO_MARCIA_API_KEY, 'Content-Type': 'application/json' },
@@ -812,37 +922,78 @@ export default function WhatsAppWebMarcia() {
       if (res.ok) {
         const raw = await safeJson(res, []);
         const list = Array.isArray(raw) ? raw : (raw?.records || []);
-        
-        const formattedList = list.map(c => {
+        const mergedMap = new Map();
+
+        for (const arch of archivedChats) {
+          mergedMap.set(arch.remoteJid, arch);
+        }
+
+        const chatsToSync = [];
+
+        for (const c of list) {
+          const remoteJid = c.remoteJid || c.id;
+          if (!remoteJid || remoteJid === 'status@broadcast' || !String(remoteJid).includes('@')) continue;
+
           const lm = c.lastMessage?.message;
-          const previewText = lm?.conversation 
-            || lm?.extendedTextMessage?.text 
+          const previewText = lm?.conversation
+            || lm?.extendedTextMessage?.text
             || (lm?.imageMessage ? '📷 Imagem' : lm?.audioMessage ? '🎵 Áudio' : lm?.videoMessage ? '🎥 Vídeo' : lm?.documentMessage ? '📄 Documento' : 'Mensagem');
 
-          const isGroup = c.remoteJid?.includes('@g.us');
-          const displayName = c.pushName || (isGroup ? 'Grupo do WhatsApp' : formatJid(c.remoteJid));
+          const isGroup = remoteJid.includes('@g.us');
+          const existing = mergedMap.get(remoteJid);
+          const evoName = c.pushName || existing?.pushName || existing?.name || (isGroup ? 'Grupo do WhatsApp' : formatJid(remoteJid));
+          const evoTimestamp = c.updatedAt || (c.lastMessage?.messageTimestamp ? new Date(Number(c.lastMessage.messageTimestamp?.low || c.lastMessage.messageTimestamp) * 1000).toISOString() : null);
 
-          return {
-            id: c.id || c.remoteJid,
-            remoteJid: c.remoteJid,
-            name: displayName,
-            pushName: c.pushName || null,
-            profilePicUrl: c.profilePicUrl || null,
-            lastMessage: previewText,
-            timestamp: c.updatedAt || (c.lastMessage?.messageTimestamp ? new Date(c.lastMessage.messageTimestamp * 1000).toISOString() : null),
-            unreadCount: c.unreadCount || 0,
+          const useEvoTime = !existing?.timestamp || (evoTimestamp && new Date(evoTimestamp) >= new Date(existing.timestamp));
+          const finalTs = useEvoTime ? (evoTimestamp || existing?.timestamp || null) : existing.timestamp;
+          const finalLastMsg = useEvoTime && previewText ? previewText : (existing?.lastMessage || previewText || 'Mensagem');
+          const finalFromMe = useEvoTime ? Boolean(c.lastMessage?.key?.fromMe) : Boolean(existing?.isFromMe);
+          const finalPic = c.profilePicUrl || existing?.profilePicUrl || null;
+          const finalUnread = c.unreadCount ?? existing?.unreadCount ?? 0;
+
+          const mergedChat = {
+            id: remoteJid,
+            remoteJid,
+            name: evoName,
+            pushName: c.pushName || existing?.pushName || null,
+            profilePicUrl: finalPic,
+            lastMessage: finalLastMsg,
+            timestamp: finalTs,
+            unreadCount: finalUnread,
+            messageCount: existing?.messageCount || 0,
             isGroup,
-            isFromMe: c.lastMessage?.key?.fromMe || false
+            isFromMe: finalFromMe
           };
-        });
 
-        formattedList.sort((a, b) => {
+          mergedMap.set(remoteJid, mergedChat);
+
+          if (!existing || useEvoTime || existing.unreadCount !== finalUnread || existing.profilePicUrl !== finalPic) {
+            chatsToSync.push({
+              remote_jid: remoteJid,
+              name: mergedChat.name,
+              push_name: mergedChat.pushName,
+              profile_pic_url: mergedChat.profilePicUrl,
+              is_group: mergedChat.isGroup,
+              last_message: mergedChat.lastMessage,
+              last_from_me: mergedChat.isFromMe,
+              last_message_at: mergedChat.timestamp,
+              unread_count: mergedChat.unreadCount,
+              message_count: mergedChat.messageCount,
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+
+        const mergedList = Array.from(mergedMap.values()).sort((a, b) => {
           if (!a.timestamp) return 1;
           if (!b.timestamp) return -1;
           return new Date(b.timestamp) - new Date(a.timestamp);
         });
 
-        setChats(formattedList);
+        setChats(mergedList);
+        if (chatsToSync.length > 0) {
+          upsertMarciaChatsBatch(chatsToSync).catch(() => {});
+        }
       }
     } catch (e) {
       console.error('Erro ao carregar conversas de Márcia:', e);
@@ -851,47 +1002,180 @@ export default function WhatsAppWebMarcia() {
     }
   };
 
-  // Carregar histórico de mensagens
+  // Carregar histórico completo do arquivo Supabase + mesclar novas mensagens ao vivo
   const loadHistory = async (remoteJid) => {
+    activeLoadJidRef.current = remoteJid;
+    shouldScrollToBottomRef.current = true;
+    archivedLoadedCountRef.current = 0;
     setLoadingMessages(true);
     setWaMessages([]);
     setAiMessages([]);
+    setChatTotalMessages(0);
+    setHasMoreOlder(false);
+
     try {
-      const res = await fetch(`${EVO_MARCIA_URL}/chat/findMessages/${EVO_MARCIA_INSTANCE}`, {
-        method: 'POST',
-        headers: { 'apikey': EVO_MARCIA_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ where: { key: { remoteJid } }, limit: 100 })
+      const currentChatObj = chats.find((c) => c.remoteJid === remoteJid);
+      const { messages: archivedMsgs, total } = await fetchArchivedMessagesForChat(remoteJid, {
+        offset: 0,
+        limit: 200
       });
 
-      if (res.ok) {
-        const raw = await safeJson(res, []);
-        const msgs = Array.isArray(raw) ? raw : (raw?.messages?.records || raw?.records || []);
-        const formatted = [];
-        for (const m of msgs) {
-          const ts = m.messageTimestamp?.low || m.messageTimestamp;
-          if (!ts) continue;
-          const txt = m.message?.conversation || m.message?.extendedTextMessage?.text;
-          const hasMedia = m.message?.imageMessage || m.message?.audioMessage || m.message?.videoMessage || m.message?.documentMessage || m.message?.stickerMessage;
-          if (!txt && !hasMedia) continue;
+      if (activeLoadJidRef.current !== remoteJid) return;
 
-          formatted.push({
-            id: m.key.id,
-            content: txt || '',
-            from_me: m.key.fromMe,
-            sender_name: m.pushName || (m.key.fromMe ? 'Márcia' : null),
-            sender_jid: m.key.participant || m.key.remoteJid,
-            created_at: new Date(ts * 1000).toISOString(),
-            raw_message: hasMedia ? m : null,
-            message_type: m.message?.imageMessage ? 'image' : m.message?.videoMessage ? 'video' : m.message?.audioMessage ? 'audio' : m.message?.documentMessage ? 'document' : 'text'
-          });
-        }
-        setWaMessages(formatted);
+      if (archivedMsgs.length > 0) {
+        archivedLoadedCountRef.current = archivedMsgs.length;
+        setWaMessages(archivedMsgs);
+        setChatTotalMessages(total);
+        setHasMoreOlder(archivedMsgs.length < total);
+        setLoadingMessages(false);
+      }
+
+      const liveMsgs = await syncLatestMessagesForSingleChat({
+        remoteJid,
+        evoUrl: EVO_MARCIA_URL,
+        evoApiKey: EVO_MARCIA_API_KEY,
+        evoInstance: EVO_MARCIA_INSTANCE,
+        fallbackChatName: currentChatObj?.name || '',
+        limit: 60
+      });
+
+      if (activeLoadJidRef.current !== remoteJid) return;
+
+      if (liveMsgs.length > 0) {
+        setWaMessages((prev) => {
+          const map = new Map();
+          for (const m of prev) map.set(m.id, m);
+          for (const m of liveMsgs) map.set(m.id, m);
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(a.created_at) - new Date(b.created_at)
+          );
+        });
       }
     } catch (e) {
       console.error('Erro ao carregar histórico:', e);
     } finally {
-      setLoadingMessages(false);
+      if (activeLoadJidRef.current === remoteJid) {
+        setLoadingMessages(false);
+      }
     }
+  };
+
+  // Carregar lotes mais antigos da conversa diretamente do arquivo Supabase
+  const handleLoadOlderMessages = async (loadAll = false) => {
+    if (!selectedJid || loadingOlderMessages) return;
+    const feed = chatFeedRef.current;
+    const prevScrollHeight = feed?.scrollHeight || 0;
+    shouldScrollToBottomRef.current = false;
+    setLoadingOlderMessages(true);
+    const targetJid = selectedJid;
+
+    try {
+      let currentOffset = archivedLoadedCountRef.current;
+      let fetchedTotal = chatTotalMessages;
+      const accumulated = [];
+
+      if (loadAll) {
+        while (currentOffset < (fetchedTotal || Infinity)) {
+          const { messages, total } = await fetchArchivedMessagesForChat(targetJid, {
+            offset: currentOffset,
+            limit: 500
+          });
+          if (activeLoadJidRef.current !== targetJid) return;
+          fetchedTotal = total;
+          if (!messages.length) break;
+          accumulated.push(...messages);
+          currentOffset += messages.length;
+          if (currentOffset >= total || messages.length < 500) break;
+        }
+      } else {
+        const { messages, total } = await fetchArchivedMessagesForChat(targetJid, {
+          offset: currentOffset,
+          limit: 200
+        });
+        if (activeLoadJidRef.current !== targetJid) return;
+        fetchedTotal = total;
+        accumulated.push(...messages);
+        currentOffset += messages.length;
+      }
+
+      archivedLoadedCountRef.current = currentOffset;
+      setChatTotalMessages(fetchedTotal);
+      setHasMoreOlder(currentOffset < fetchedTotal);
+
+      if (accumulated.length > 0) {
+        setWaMessages((prev) => {
+          const map = new Map();
+          for (const m of accumulated) map.set(m.id, m);
+          for (const m of prev) map.set(m.id, m);
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(a.created_at) - new Date(b.created_at)
+          );
+        });
+
+        requestAnimationFrame(() => {
+          if (chatFeedRef.current) {
+            chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight - prevScrollHeight;
+          }
+        });
+      }
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  };
+
+  // Baixar histórico completo de TODAS as conversas da Evolution API para o Supabase no App
+  const handleStartFullHistorySync = async () => {
+    if (fullSyncProgress?.active) return;
+    const controller = new AbortController();
+    fullSyncAbortRef.current = controller;
+
+    try {
+      const result = await syncMarciaFullHistoryInApp({
+        evoUrl: EVO_MARCIA_URL,
+        evoApiKey: EVO_MARCIA_API_KEY,
+        evoInstance: EVO_MARCIA_INSTANCE,
+        signal: controller.signal,
+        onProgress: (prog) => setFullSyncProgress(prog)
+      });
+
+      await loadAllChats();
+      if (selectedJid) {
+        await loadHistory(selectedJid);
+      }
+
+      setFullSyncProgress({
+        active: false,
+        completed: !result.aborted,
+        aborted: result.aborted,
+        page: result.totalPages,
+        totalPages: result.totalPages,
+        savedMessages: result.savedMessages,
+        totalRemoteMessages: result.savedMessages,
+        phase: result.aborted
+          ? `Sincronização interrompida (${result.savedMessages.toLocaleString('pt-BR')} msgs salvas até aqui).`
+          : `Histórico completo salvo! ${result.totalChats.toLocaleString('pt-BR')} conversas e ${result.savedMessages.toLocaleString('pt-BR')} mensagens sincronizadas.`
+      });
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        setFullSyncProgress((prev) => ({
+          ...(prev || {}),
+          active: false,
+          aborted: true,
+          phase: 'Sincronização interrompida pelo usuário.'
+        }));
+      } else {
+        setFullSyncProgress((prev) => ({
+          ...(prev || {}),
+          active: false,
+          error: err.message,
+          phase: `Erro na sincronização: ${err.message}`
+        }));
+      }
+    }
+  };
+
+  const handleStopFullHistorySync = () => {
+    fullSyncAbortRef.current?.abort();
   };
 
   // ── GRAVADOR DE ÁUDIO DE VOZ AO VIVO ───────────────────────────────────────
@@ -945,17 +1229,22 @@ export default function WhatsAppWebMarcia() {
     const chat = chats.find(c => c.remoteJid === selectedJid);
     if (!chat) return;
 
+    shouldScrollToBottomRef.current = true;
+    const tempId = `local_${Date.now()}`;
+    const nowIso = new Date().toISOString();
+
     setWaMessages(prev => [...prev, {
-      id: Date.now().toString(),
+      id: tempId,
       content: caption || '',
       preview_url: type === 'image' || type === 'video' ? `data:${mimeType};base64,${base64}` : null,
       from_me: true,
       message_type: type,
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
       sender_name: 'Márcia'
     }]);
 
     try {
+      let sentRaw = null;
       if (type === 'audio') {
         const r = await fetch(`${EVO_MARCIA_URL}/message/sendWhatsAppAudio/${EVO_MARCIA_INSTANCE}`, {
           method: 'POST',
@@ -963,6 +1252,7 @@ export default function WhatsAppWebMarcia() {
           body: JSON.stringify({ number: chat.remoteJid, audio: base64, encoding: true })
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        sentRaw = await safeJson(r, null);
       } else {
         const endpoint = `${EVO_MARCIA_URL}/message/sendMedia/${EVO_MARCIA_INSTANCE}`;
         const body = {
@@ -978,6 +1268,42 @@ export default function WhatsAppWebMarcia() {
           body: JSON.stringify(body)
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        sentRaw = await safeJson(r, null);
+      }
+
+      const row = sentRaw?.key?.id
+        ? extractWaMessageRow(sentRaw)
+        : {
+            message_id: sentRaw?.key?.id || tempId,
+            remote_jid: chat.remoteJid,
+            sender_name: 'Márcia',
+            sender_jid: chat.remoteJid,
+            from_me: true,
+            message_type: type,
+            content: caption || fileName || '',
+            media_mime: mimeType || null,
+            media_seconds: null,
+            media_file_name: fileName || null,
+            media_file_length: null,
+            raw_message: null,
+            created_at: nowIso
+          };
+
+      if (row) {
+        upsertMarciaMessagesBatch([row]).catch(() => {});
+        upsertMarciaChatsBatch([{
+          remote_jid: chat.remoteJid,
+          name: chat.name,
+          push_name: chat.pushName,
+          profile_pic_url: chat.profilePicUrl,
+          is_group: chat.isGroup,
+          last_message: caption || (type === 'audio' ? '🎵 Áudio' : type === 'video' ? '🎥 Vídeo' : type === 'document' ? `📄 ${fileName || 'Documento'}` : '📷 Imagem'),
+          last_from_me: true,
+          last_message_at: nowIso,
+          unread_count: chat.unreadCount || 0,
+          message_count: (chat.messageCount || 0) + 1,
+          updated_at: nowIso
+        }]).catch(() => {});
       }
     } catch (err) {
       alert('Erro ao enviar mídia: ' + err.message);
@@ -986,12 +1312,17 @@ export default function WhatsAppWebMarcia() {
 
   // Enviar mensagem de texto normal
   const handleSendWaText = async (text, remoteJid) => {
+    shouldScrollToBottomRef.current = true;
+    const tempId = `local_${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const chat = chats.find(c => c.remoteJid === remoteJid);
+
     setWaMessages(prev => [...prev, {
-      id: Date.now().toString(),
+      id: tempId,
       content: text || '',
       from_me: true,
       message_type: 'text',
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
       sender_name: 'Márcia'
     }]);
 
@@ -1002,6 +1333,42 @@ export default function WhatsAppWebMarcia() {
         body: JSON.stringify({ number: remoteJid, text })
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const sentRaw = await safeJson(r, null);
+
+      const row = sentRaw?.key?.id
+        ? extractWaMessageRow(sentRaw)
+        : {
+            message_id: tempId,
+            remote_jid: remoteJid,
+            sender_name: 'Márcia',
+            sender_jid: remoteJid,
+            from_me: true,
+            message_type: 'text',
+            content: text || '',
+            media_mime: null,
+            media_seconds: null,
+            media_file_name: null,
+            media_file_length: null,
+            raw_message: null,
+            created_at: nowIso
+          };
+
+      if (row) {
+        upsertMarciaMessagesBatch([row]).catch(() => {});
+        upsertMarciaChatsBatch([{
+          remote_jid: remoteJid,
+          name: chat?.name || formatMarciaJid(remoteJid),
+          push_name: chat?.pushName || null,
+          profile_pic_url: chat?.profilePicUrl || null,
+          is_group: Boolean(chat?.isGroup || remoteJid.includes('@g.us')),
+          last_message: (text || '').slice(0, 160),
+          last_from_me: true,
+          last_message_at: nowIso,
+          unread_count: chat?.unreadCount || 0,
+          message_count: (chat?.messageCount || 0) + 1,
+          updated_at: nowIso
+        }]).catch(() => {});
+      }
     } catch (e) {
       alert('Erro ao enviar mensagem: ' + e.message);
     }
@@ -1118,6 +1485,28 @@ export default function WhatsAppWebMarcia() {
         </div>
 
         <div className="wab-topbar-right">
+          <button
+            type="button"
+            className={`wab-sync-btn ${fullSyncProgress?.active ? 'running' : ''}`}
+            onClick={handleStartFullHistorySync}
+            disabled={Boolean(fullSyncProgress?.active)}
+            title="Baixar todo o histórico de conversas do WhatsApp para o banco do aplicativo"
+          >
+            {fullSyncProgress?.active ? (
+              <>
+                <RefreshCw size={14} className="fa-spin" />
+                <span>
+                  Baixando {fullSyncProgress.totalPages > 0 ? `${Math.round((fullSyncProgress.page / fullSyncProgress.totalPages) * 100)}%` : '...'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Download size={14} />
+                <span>Baixar Histórico</span>
+              </>
+            )}
+          </button>
+
           <Link 
             to="/admin/whatsapp" 
             className="wab-switch-btn"
@@ -1140,6 +1529,57 @@ export default function WhatsAppWebMarcia() {
           </div>
         </div>
       </header>
+
+      {/* Banner de Progresso de Sincronização Completa */}
+      {fullSyncProgress && (
+        <div className="wab-sync-progress-banner">
+          <div className="wab-sync-progress-top">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              {fullSyncProgress.active ? (
+                <RefreshCw size={14} className="fa-spin" color="#008069" />
+              ) : fullSyncProgress.error ? (
+                <AlertCircle size={14} color="#dc2626" />
+              ) : (
+                <CheckCircle2 size={14} color="#008069" />
+              )}
+              <span>
+                {fullSyncProgress.phase}{' '}
+                {fullSyncProgress.active && fullSyncProgress.totalPages > 0
+                  ? `(${fullSyncProgress.savedMessages.toLocaleString('pt-BR')} msgs salvas)`
+                  : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              {fullSyncProgress.active ? (
+                <button
+                  type="button"
+                  onClick={handleStopFullHistorySync}
+                  style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '6px', padding: '2px 10px', cursor: 'pointer', fontSize: '11.5px', fontWeight: 700 }}
+                >
+                  Parar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setFullSyncProgress(null)}
+                  style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', padding: '2px', display: 'flex' }}
+                  title="Fechar aviso"
+                >
+                  <XIcon size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+          {fullSyncProgress.active && fullSyncProgress.totalPages > 0 && (
+            <div className="wab-sync-progress-bar">
+              <div
+                className="wab-sync-progress-fill"
+                style={{ width: `${Math.min(100, Math.round((fullSyncProgress.page / fullSyncProgress.totalPages) * 100))}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── CORPO PRINCIPAL DE 2 COLUNAS ── */}
       <div className={`wab-layout ${selectedJid ? 'chat-active' : ''}`}>
@@ -1253,7 +1693,15 @@ export default function WhatsAppWebMarcia() {
           </div>
 
           {/* Lista de Conversas com Scroll */}
-          <div className="wab-chat-list">
+          <div
+            className="wab-chat-list"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (el.scrollHeight - el.scrollTop - el.clientHeight < 220) {
+                setVisibleChatsCount((prev) => (prev < filteredChats.length ? prev + 150 : prev));
+              }
+            }}
+          >
             {loadingChats && chats.length === 0 ? (
               <div style={{ padding: '40px 20px', textAlign: 'center', color: '#667781' }}>
                 <RefreshCw size={26} className="fa-spin" style={{ color: '#008069', margin: '0 auto 12px' }} />
@@ -1264,7 +1712,8 @@ export default function WhatsAppWebMarcia() {
                 Nenhuma conversa encontrada neste filtro.
               </div>
             ) : (
-              filteredChats.map(c => {
+              <>
+                {filteredChats.slice(0, visibleChatsCount).map(c => {
                 const isSelected = selectedJid === c.remoteJid;
                 const isUnread = c.unreadCount > 0;
                 return (
@@ -1328,7 +1777,20 @@ export default function WhatsAppWebMarcia() {
                     </div>
                   </div>
                 );
-              })
+              })}
+
+                {filteredChats.length > visibleChatsCount && (
+                  <div style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #f2f5f7' }}>
+                    <button
+                      type="button"
+                      className="wab-load-older-btn"
+                      onClick={() => setVisibleChatsCount((prev) => prev + 150)}
+                    >
+                      Mostrar mais conversas ({filteredChats.length - visibleChatsCount} restantes)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             {isSelectMode && selectedChatJids.length > 0 && (
@@ -1376,7 +1838,9 @@ export default function WhatsAppWebMarcia() {
                   <div className="wab-chat-header-info">
                     <span className="wab-chat-header-name">{activeChat.name}</span>
                     <span className="wab-chat-header-status">
-                      {isAiMode ? '✨ Assistente Gemini Ativo' : (activeChat.isGroup ? 'Grupo do WhatsApp' : 'online')}
+                      {isAiMode
+                        ? '✨ Assistente Gemini Ativo'
+                        : `${activeChat.isGroup ? 'Grupo do WhatsApp' : 'online'}${chatTotalMessages > 0 ? ` • ${chatTotalMessages.toLocaleString('pt-BR')} mensagens salvas` : ''}`}
                     </span>
                   </div>
                 </div>
@@ -1427,6 +1891,34 @@ export default function WhatsAppWebMarcia() {
                   </div>
                 )}
 
+                {hasMoreOlder && !loadingMessages && (
+                  <div className="wab-load-older-bar">
+                    <button
+                      type="button"
+                      className="wab-load-older-btn"
+                      onClick={() => handleLoadOlderMessages(false)}
+                      disabled={loadingOlderMessages}
+                    >
+                      {loadingOlderMessages ? <RefreshCw size={13} className="fa-spin" /> : <Clock size={13} />}
+                      <span>
+                        {loadingOlderMessages
+                          ? 'Carregando mensagens antigas...'
+                          : `Carregar +200 antigas (${waMessages.length.toLocaleString('pt-BR')} de ${chatTotalMessages.toLocaleString('pt-BR')})`}
+                      </span>
+                    </button>
+                    {chatTotalMessages - waMessages.length <= 2500 && (
+                      <button
+                        type="button"
+                        className="wab-load-older-btn"
+                        onClick={() => handleLoadOlderMessages(true)}
+                        disabled={loadingOlderMessages}
+                      >
+                        Carregar todas ({chatTotalMessages.toLocaleString('pt-BR')})
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {loadingMessages ? (
                   <div style={{ position: 'relative', zIndex: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#667781' }}>
                     <RefreshCw size={24} className="fa-spin" style={{ color: '#008069', marginRight: '10px' }} />
@@ -1447,6 +1939,12 @@ export default function WhatsAppWebMarcia() {
                     const currentDateLabel = getMessageDateLabel(msg.created_at);
                     const prevDateLabel = prevMsg ? getMessageDateLabel(prevMsg.created_at) : null;
                     const showDateSeparator = currentDateLabel !== prevDateLabel;
+                    const mediaCaption =
+                      msg.raw_message?.message?.imageMessage?.caption ||
+                      msg.raw_message?.message?.videoMessage?.caption ||
+                      msg.raw_message?.message?.documentMessage?.fileName ||
+                      '';
+                    const showStandaloneContent = Boolean(msg.content) && (!msg.raw_message || msg.content !== mediaCaption);
 
                     return (
                       <React.Fragment key={msg.id || idx}>
@@ -1491,7 +1989,7 @@ export default function WhatsAppWebMarcia() {
                             ) : null}
 
                             {/* Conteúdo de Texto */}
-                            {msg.content && (
+                            {showStandaloneContent && (
                               <div className="wab-msg-content">{msg.content}</div>
                             )}
 
@@ -1720,18 +2218,33 @@ export default function WhatsAppWebMarcia() {
               </div>
               <h2>WhatsApp Business Web</h2>
               <p>
-                Envie e receba mensagens, fotos, vídeos, áudios e documentos. Gerencie todas as suas <strong>63.992 conversas</strong> com o visual completo e autêntico do WhatsApp.
+                Envie e receba mensagens, fotos, vídeos, áudios e documentos. Gerencie todo o seu histórico salvo no aplicativo:{' '}
+                <strong>{chats.length.toLocaleString('pt-BR')} conversas</strong> e{' '}
+                <strong>{totalArchivedMessages.toLocaleString('pt-BR')} mensagens arquivadas</strong>.
               </p>
-              
-              <button 
-                type="button"
-                onClick={() => setIsConnModalOpen(true)}
-                className="btn btn-primary"
-                style={{ background: '#008069', borderColor: '#008069', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', fontSize: '15px', fontWeight: 700 }}
-              >
-                <QrCode size={18} />
-                <span>{connInfo.state === 'open' ? 'Aparelho Conectado (Márcia)' : 'Conectar Aparelho / QR Code'}</span>
-              </button>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button 
+                  type="button"
+                  onClick={() => setIsConnModalOpen(true)}
+                  className="btn btn-primary"
+                  style={{ background: '#008069', borderColor: '#008069', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 22px', fontSize: '14.5px', fontWeight: 700 }}
+                >
+                  <QrCode size={18} />
+                  <span>{connInfo.state === 'open' ? 'Aparelho Conectado (Márcia)' : 'Conectar Aparelho / QR Code'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStartFullHistorySync}
+                  disabled={Boolean(fullSyncProgress?.active)}
+                  className="btn"
+                  style={{ background: '#ffffff', border: '1px solid #008069', color: '#008069', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '14.5px', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  <Download size={18} />
+                  <span>{fullSyncProgress?.active ? 'Sincronizando Histórico...' : 'Atualizar / Baixar Histórico Completo'}</span>
+                </button>
+              </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '36px', color: '#8696a0', fontSize: '13px' }}>
                 <Lock size={13} />
@@ -1844,7 +2357,7 @@ export default function WhatsAppWebMarcia() {
 
           {/* Centro: Imagem ou Vídeo */}
           <div className="wab-lightbox-center" onClick={e => e.stopPropagation()}>
-            {lightboxData.type === 'video' ? (
+            {lightboxData.type === 'video' && lightboxData.url ? (
               <video 
                 src={lightboxData.url} 
                 controls 
