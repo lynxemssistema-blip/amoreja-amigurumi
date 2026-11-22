@@ -56,6 +56,18 @@ import './WhatsAppWebMarcia.css';
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
 // Credenciais da Instância Márcia
+// Helper para parsing seguro de JSON sem estourar "Unexpected end of JSON input"
+const safeJson = async (response, fallback = null) => {
+  try {
+    if (!response || !response.ok) return fallback;
+    const text = await response.text();
+    if (!text || !text.trim()) return fallback;
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+};
+
 const EVO_MARCIA_URL = import.meta.env.VITE_EVO_MARCIA_URL || 'https://evo.lynxems.com.br';
 const EVO_MARCIA_API_KEY = import.meta.env.VITE_EVO_MARCIA_API_KEY || '8A737100D665-451D-8E66-6CCF4380C98E';
 const EVO_MARCIA_INSTANCE = import.meta.env.VITE_EVO_MARCIA_INSTANCE || 'Marcia';
@@ -199,8 +211,8 @@ const WhatsAppMediaMessage = ({
         });
 
         if (res.ok) {
-          const d = await res.json();
-          if (alive && d.base64) {
+          const d = await safeJson(res, null);
+          if (alive && d?.base64) {
             setMediaData(`data:${d.mimetype};base64,${d.base64}`);
             setRawBase64(d.base64);
             setMimeType(d.mimetype);
@@ -719,13 +731,13 @@ export default function WhatsAppWebMarcia() {
       const res = await fetch(`${EVO_MARCIA_URL}/instance/connectionState/${EVO_MARCIA_INSTANCE}`, {
         headers: { 'apikey': EVO_MARCIA_API_KEY }
       });
-      const data = await res.json();
-      const state = data.instance?.state || 'close';
+      const data = await safeJson(res, {});
+      const state = data?.instance?.state || 'close';
 
       const fetchRes = await fetch(`${EVO_MARCIA_URL}/instance/fetchInstances`, {
         headers: { 'apikey': EVO_MARCIA_API_KEY }
       });
-      const instances = await fetchRes.json();
+      const instances = await safeJson(fetchRes, []);
       const inst = Array.isArray(instances) ? instances.find(i => i.name === EVO_MARCIA_INSTANCE) : null;
 
       setConnInfo(prev => ({
@@ -774,8 +786,8 @@ export default function WhatsAppWebMarcia() {
       });
 
       if (res.ok) {
-        const raw = await res.json();
-        const list = Array.isArray(raw) ? raw : (raw.records || []);
+        const raw = await safeJson(res, []);
+        const list = Array.isArray(raw) ? raw : (raw?.records || []);
         
         const formattedList = list.map(c => {
           const lm = c.lastMessage?.message;
@@ -828,8 +840,8 @@ export default function WhatsAppWebMarcia() {
       });
 
       if (res.ok) {
-        const raw = await res.json();
-        const msgs = Array.isArray(raw) ? raw : (raw.messages?.records || raw.records || []);
+        const raw = await safeJson(res, []);
+        const msgs = Array.isArray(raw) ? raw : (raw?.messages?.records || raw?.records || []);
         const formatted = [];
         for (const m of msgs) {
           const ts = m.messageTimestamp?.low || m.messageTimestamp;

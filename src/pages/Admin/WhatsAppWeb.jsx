@@ -26,6 +26,17 @@ import WhatsAppCampaignStudio from '../../components/WhatsAppCampaignStudio';
 import './WhatsAppWeb.css';
 
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+// Safe json helper
+const safeJson = async (res, fallback = null) => {
+  try {
+    if (!res || !res.ok) return fallback;
+    const txt = await res.text();
+    return txt ? JSON.parse(txt) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const EVO_API_KEY = import.meta.env.VITE_EVO_API_KEY;
 const EVO_INSTANCE = import.meta.env.VITE_EVO_INSTANCE;
 const EVO_URL = import.meta.env.VITE_EVO_URL;
@@ -236,13 +247,13 @@ export default function WhatsAppWeb() {
       const res = await fetch(`${EVO_URL}/instance/connectionState/${EVO_INSTANCE}`, {
         headers: { 'apikey': EVO_API_KEY }
       });
-      const data = await res.json();
-      const state = data.instance?.state || 'close';
+      const data = await safeJson(res, {});
+      const state = data?.instance?.state || 'close';
 
       const fetchRes = await fetch(`${EVO_URL}/instance/fetchInstances`, {
         headers: { 'apikey': EVO_API_KEY }
       });
-      const instances = await fetchRes.json();
+      const instances = await safeJson(fetchRes, []);
       const inst = Array.isArray(instances) ? instances.find(i => i.name === EVO_INSTANCE) : null;
 
       setConnInfo({
@@ -285,8 +296,8 @@ export default function WhatsAppWeb() {
       });
       const evoChats = {};
       if (res.ok) {
-        const raw = await res.json();
-        const list = Array.isArray(raw) ? raw : (raw.records || []);
+        const raw = await safeJson(res, []);
+        const list = Array.isArray(raw) ? raw : (raw?.records || []);
         list.forEach(chat => {
           const lm = chat.lastMessage?.message;
           evoChats[chat.remoteJid] = {
@@ -332,8 +343,8 @@ export default function WhatsAppWeb() {
       });
 
       if (res.ok) {
-        const raw = await res.json();
-        const msgs = Array.isArray(raw) ? raw : (raw.messages?.records || raw.records || []);
+        const raw = await safeJson(res, []);
+        const msgs = Array.isArray(raw) ? raw : (raw?.messages?.records || raw?.records || []);
         const formatted = [];
         for (const m of msgs) {
           const ts = m.messageTimestamp?.low || m.messageTimestamp;
