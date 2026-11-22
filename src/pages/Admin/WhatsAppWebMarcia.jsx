@@ -695,6 +695,7 @@ export default function WhatsAppWebMarcia() {
   });
 
   const messagesEndRef = useRef(null);
+  const chatFeedRef = useRef(null);
   const selectedItemRef = useRef(null);
   const fileInputImgRef = useRef(null);
   const fileInputVideoRef = useRef(null);
@@ -786,14 +787,16 @@ export default function WhatsAppWebMarcia() {
       setIsAttachMenuOpen(false);
       stopRecordingAudio(false);
       setTimeout(() => {
-        selectedItemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        chatInputRef.current?.focus();
+        chatInputRef.current?.focus({ preventScroll: true });
       }, 100);
     }
   }, [selectedJid]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const feed = chatFeedRef.current;
+    if (feed) {
+      feed.scrollTop = feed.scrollHeight;
+    }
   }, [waMessages, aiMessages, loadingMessages]);
 
   // Carregar todas as conversas do WhatsApp da Márcia
@@ -1061,7 +1064,7 @@ export default function WhatsAppWebMarcia() {
       previewUrl: URL.createObjectURL(file)
     });
     e.target.value = '';
-    chatInputRef.current?.focus();
+    chatInputRef.current?.focus({ preventScroll: true });
   };
 
   const handleSubmit = async (e) => {
@@ -1413,7 +1416,7 @@ export default function WhatsAppWebMarcia() {
               </div>
 
               {/* Feed com Balões de Conversa e Fundo com Doodle Oficial */}
-              <div className="wab-chat-feed">
+              <div className="wab-chat-feed" ref={chatFeedRef}>
                 <div className="wab-doodle-bg" />
 
                 {/* Banner Modo IA */}
@@ -1657,7 +1660,7 @@ export default function WhatsAppWebMarcia() {
                       type="button" 
                       className="wab-icon-action" 
                       title="Emojis"
-                      onClick={() => chatInputRef.current?.focus()}
+                      onClick={() => chatInputRef.current?.focus({ preventScroll: true })}
                     >
                       <Smile size={22} color="#54656f" />
                     </button>
