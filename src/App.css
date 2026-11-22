@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh; /* Correção para a barra de endereços do iPhone (iOS Safari) */
 }
 
 .main-content-wrapper {
@@ -187,4 +188,11 @@
 .cart-drawer-empty p {
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+/* Responsividade do App Global */
+@media (max-width: 1024px) {
+  .app-layout {
+    padding-bottom: calc(75px + env(safe-area-inset-bottom)); /* Espaço permanente para o BottomNav */
+  }
 }

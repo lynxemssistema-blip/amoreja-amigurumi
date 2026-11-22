@@ -15,8 +15,10 @@ import {
   CheckCircle2, 
   Info,
   ShieldCheck,
-  Star
+  Star,
+  Flame
 } from 'lucide-react';
+import { getPaymentPlatformInfo } from '../../utils/paymentPlatform';
 import './ManageProducts.css';
 
 const INITIAL_MOCK = [
@@ -52,14 +54,10 @@ export default function ManageProducts() {
   const [isFeatured, setIsFeatured] = useState(false);
   const [maratonaId, setMaratonaId] = useState('');
   
-  // Mercado Pago / Tipo de Cobrança
-  const [paymentType, setPaymentType] = useState('automatic'); // 'automatic' | 'mp_link'
+  // Link de Pagamento / Checkout Hotmart
+  const [paymentType, setPaymentType] = useState('mp_link');
   const [mpPaymentLink, setMpPaymentLink] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isGeneratingMpLink, setIsGeneratingMpLink] = useState(false);
-  const [mpCreationFeedback, setMpCreationFeedback] = useState(null);
-  const [syncingAll, setSyncingAll] = useState(false);
-  const [syncingId, setSyncingId] = useState(null);
   
   // Arquivos originais (urls ou paths)
   const [imageUrl, setImageUrl] = useState('');
@@ -74,202 +72,6 @@ export default function ManageProducts() {
   const [uploadStatus, setUploadStatus] = useState('');
 
   const [message, setMessage] = useState('');
-
-  const fetchActiveMpToken = async () => {
-    let token = '';
-    let mode = 'test';
-
-    if (isSupabaseConfigured()) {
-      const { data: settingsData } = await supabase
-        .from('new_amoreja_settings')
-        .select('key, value')
-        .in('key', ['mp_mode', 'mp_test_access_token', 'mp_prod_access_token']);
-
-      if (settingsData) {
-        const modeSetting = settingsData.find(s => s.key === 'mp_mode');
-        if (modeSetting && modeSetting.value) mode = modeSetting.value;
-
-        const tokenKey = mode === 'prod' ? 'mp_prod_access_token' : 'mp_test_access_token';
-        const tokenSetting = settingsData.find(s => s.key === tokenKey);
-        if (tokenSetting && tokenSetting.value) token = tokenSetting.value;
-      }
-    }
-
-    if (!token) {
-      token = 'TEST-4852351940284754-111521-cd8aeace7cdd4827365f1c23063177a9-443850714';
-    }
-    return { token, mode };
-  };
-
-  const createMpPreferenceApi = async (prodTitle, prodPrice, prodDesc, prodImg, prodId) => {
-    const { token, mode } = await fetchActiveMpToken();
-    
-    // Mercado Pago exige URLs públicas válidas (não aceita localhost com auto_return)
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const baseUrl = isLocalhost ? 'https://amoreja.com.br' : window.location.origin;
-
-    const unitPrice = parseFloat(prodPrice);
-    const validPrice = isNaN(unitPrice) || unitPrice <= 0 ? 1.00 : parseFloat(unitPrice.toFixed(2));
-
-    const preferencePayload = {
-      items: [
-        {
-          title: (prodTitle || "Receita Amoreja Amigurumi").trim().slice(0, 120),
-          description: (prodDesc?.trim() || "Receita digital de Amigurumi em PDF - Amoreja").slice(0, 200),
-          quantity: 1,
-          currency_id: "BRL",
-          unit_price: validPrice,
-          picture_url: (prodImg && typeof prodImg === 'string' && prodImg.startsWith('http')) ? prodImg : undefined
-        }
-      ],
-      external_reference: prodId ? String(prodId) : "amoreja_recipe",
-      back_urls: {
-        success: `${baseUrl}/painel`,
-        failure: `${baseUrl}/loja`,
-        pending: `${baseUrl}/painel`
-      },
-      auto_return: "approved"
-    };
-
-    const res = await fetch('https://api.mercadopago.com/checkout/preferences', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(preferencePayload)
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      console.warn("Detalhes do erro na API Mercado Pago:", errData);
-      throw new Error(errData.message || `Erro na API Mercado Pago (${res.status})`);
-    }
-
-    const prefData = await res.json();
-    return mode === 'test' 
-      ? (prefData.sandbox_init_point || prefData.init_point) 
-      : prefData.init_point;
-  };
-
-  const saveProductMpConfig = async (productId, link) => {
-    if (!isSupabaseConfigured()) return;
-    
-    // 1. Salvar no new_amoreja_settings (100% garantido e sem erros de schema)
-    await supabase.from('new_amoreja_settings').upsert({
-      key: `mp_prod_cfg_${productId}`,
-      value: JSON.stringify({ payment_type: 'mp_link', mp_payment_link: link })
-    }, { onConflict: 'key' });
-  };
-
-  const handleGenerateMercadoPagoLink = async () => {
-    if (!title.trim() || !price) {
-      alert("Preencha o Título e o Preço da receita antes de criar o produto no Mercado Pago.");
-      return;
-    }
-
-    if (parseFloat(price) <= 0) {
-      alert("O valor da receita precisa ser maior que R$ 0,00.");
-      return;
-    }
-
-    setIsGeneratingMpLink(true);
-    setMpCreationFeedback(null);
-
-    try {
-      const { mode } = await fetchActiveMpToken();
-      const generatedLink = await createMpPreferenceApi(title, price, description, imageUrl, editId);
-      setMpPaymentLink(generatedLink);
-      setMpCreationFeedback({
-        type: 'success',
-        text: `Produto e Checkout criados com sucesso no Mercado Pago! (${mode === 'prod' ? 'Ambiente Produção' : 'Ambiente Sandbox Testes'})`
-      });
-      return generatedLink;
-    } catch (err) {
-      console.warn("Aviso na criação direta via Mercado Pago API:", err);
-      const fallbackUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=amoreja_${Math.floor(Math.random()*1000000)}`;
-      setMpPaymentLink(fallbackUrl);
-      setMpCreationFeedback({
-        type: 'warning',
-        text: `Link de checkout estruturado com sucesso no formato Mercado Pago!`
-      });
-      return fallbackUrl;
-    } finally {
-      setIsGeneratingMpLink(false);
-    }
-  };
-
-  // Criar e vincular produto no Mercado Pago direto da linha da tabela
-  const handleQuickCreateMercadoPago = async (product) => {
-    if (product.is_free || parseFloat(product.price) <= 0) {
-      alert("Receitas gratuitas não necessitam de link de pagamento.");
-      return;
-    }
-
-    setSyncingId(product.id);
-    try {
-      let link = '';
-      try {
-        link = await createMpPreferenceApi(product.title, product.price, product.description, product.image_url, product.id);
-      } catch (e) {
-        console.warn("Fallback de link para:", product.title, e);
-        link = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=amoreja_${product.id.slice(0,8)}`;
-      }
-
-      await saveProductMpConfig(product.id, link);
-
-      setMessage(`Receita "${product.title}" inserida com sucesso no Mercado Pago!`);
-      await loadProducts();
-      setTimeout(() => setMessage(''), 4000);
-    } catch (err) {
-      alert("Erro ao criar no Mercado Pago: " + err.message);
-    } finally {
-      setSyncingId(null);
-    }
-  };
-
-  // Sincronizar todas as receitas existentes de uma só vez
-  const handleSyncAllToMercadoPago = async () => {
-    const eligible = products.filter(p => !p.is_free && parseFloat(p.price) > 0);
-    if (eligible.length === 0) {
-      alert("Nenhuma receita paga encontrada para sincronizar.");
-      return;
-    }
-
-    if (!window.confirm(`Deseja criar o produto no Mercado Pago para todas as ${eligible.length} receitas cadastradas?`)) {
-      return;
-    }
-
-    setSyncingAll(true);
-    let successCount = 0;
-
-    try {
-      for (const prod of eligible) {
-        try {
-          let link = '';
-          try {
-            link = await createMpPreferenceApi(prod.title, prod.price, prod.description, prod.image_url, prod.id);
-          } catch (e) {
-            console.warn("Fallback de link para:", prod.title, e);
-            link = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=amoreja_${prod.id.slice(0,8)}`;
-          }
-
-          await saveProductMpConfig(prod.id, link);
-          successCount++;
-        } catch (e) {
-          console.error(`Erro ao sincronizar receita ${prod.title}:`, e);
-        }
-      }
-
-      setMessage(`🎉 ${successCount} receitas sincronizadas e criadas com sucesso no Mercado Pago!`);
-      await loadProducts();
-      setTimeout(() => setMessage(''), 5000);
-    } catch (err) {
-      alert("Erro durante a sincronização: " + err.message);
-    } finally {
-      setSyncingAll(false);
-    }
-  };
 
   // Parceiras
   const [partnersList, setPartnersList] = useState([]);
@@ -442,7 +244,7 @@ export default function ManageProducts() {
     setIsFree(false);
     setIsFeatured(false);
     setMaratonaId('');
-    setPaymentType('automatic');
+    setPaymentType('mp_link');
     setMpPaymentLink('');
     setImageUrl('');
     setPdfPath('');
@@ -450,7 +252,6 @@ export default function ManageProducts() {
     setCoverFile(null);
     setPdfFile(null);
     setGalleryFiles([]);
-    setMpCreationFeedback(null);
     setPartnerId('');
     setPartnerCommissionPct(70);
     setApprovalStatus('approved');
@@ -513,11 +314,6 @@ export default function ManageProducts() {
     }
 
     let currentMpLink = mpPaymentLink.trim();
-
-    if (paymentType === 'mp_link' && !currentMpLink && !isFree) {
-      setUploadStatus('Criando produto no Mercado Pago...');
-      currentMpLink = await handleGenerateMercadoPagoLink();
-    }
     
     // Se não tiver Supabase configurado (demo mode)
     if (!isSupabaseConfigured()) {
@@ -655,16 +451,20 @@ export default function ManageProducts() {
     }
 
     try {
-      const { error } = await supabase
-        .from('new_amoreja_products')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUuid) {
+        const { error } = await supabase
+          .from('new_amoreja_products')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      }
 
-      // Limpar fallback se existir
+      // Limpar fallback se existir (configuração ou produtos parceiros salvos em settings)
       await supabase.from('new_amoreja_settings').delete().eq('key', `mp_prod_cfg_${id}`);
+      await supabase.from('new_amoreja_settings').delete().like('key', `%${id}%`);
 
-      setMessage('Receita excluída do banco!');
+      setMessage('Receita excluída com sucesso!');
       loadProducts();
     } catch (err) {
       alert("Erro ao deletar: " + err.message);
@@ -680,22 +480,10 @@ export default function ManageProducts() {
       <div className="admin-page-header">
         <div>
           <h2>Gerenciamento de Receitas</h2>
-          <p className="admin-page-subtitle">Cadastre suas receitas em PDF e defina a integração de venda com o Mercado Pago.</p>
+          <p className="admin-page-subtitle">Cadastre suas receitas e vincule o link de checkout seguro da Hotmart.</p>
         </div>
         {!isEditing && (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {products.length > 0 && (
-              <button 
-                type="button"
-                onClick={handleSyncAllToMercadoPago} 
-                className="btn btn-outline btn-sync-mp" 
-                disabled={syncingAll}
-                title="Criar o produto e gerar link no Mercado Pago para todas as receitas da lista"
-              >
-                <Zap size={16} className={syncingAll ? 'mp-spin' : ''} />
-                <span>{syncingAll ? 'Sincronizando no MP...' : '⚡ Sincronizar Todas no MP'}</span>
-              </button>
-            )}
             <button onClick={() => setIsEditing(true)} className="btn btn-primary">
               <Plus size={16} /> Cadastrar Nova Receita
             </button>
@@ -709,8 +497,8 @@ export default function ManageProducts() {
         <div className="product-form-card">
           <div className="form-header">
             <div>
-              <h3>{editId ? 'Editar Receita' : 'Nova Receita em PDF'}</h3>
-              <p className="form-subtitle">Preencha os detalhes e vincule a receita ao Mercado Pago.</p>
+              <h3>{editId ? 'Editar Receita' : 'Nova Receita'}</h3>
+              <p className="form-subtitle">Preencha os detalhes da receita e insira o link de pagamento da Hotmart.</p>
             </div>
             <button onClick={resetForm} className="btn-close-form" disabled={isUploading}>
               <X size={18} />
@@ -819,137 +607,69 @@ export default function ManageProducts() {
                 </div>
               )}
 
-              {/* SEÇÃO: INTEGRAÇÃO MERCADO PAGO */}
+              {/* SEÇÃO: FORMA DE PAGAMENTO & CHECKOUT (HOTMART) */}
               <div className="form-group col-span-2 mp-integration-box">
                 <div className="mp-box-header">
                   <div className="mp-box-title-group">
-                    <div className="mp-icon-badge">
-                      <CreditCard size={18} />
+                    <div className="mp-icon-badge" style={{ background: '#fff1ec', color: '#F04E23' }}>
+                      <Flame size={18} />
                     </div>
                     <div>
-                      <h4 className="mp-box-title">Integração & Cobrança Mercado Pago</h4>
-                      <p className="mp-box-subtitle">Defina como esta receita será comercializada e cobrada dos seus clientes.</p>
+                      <h4 className="mp-box-title">Plataforma de Pagamento & Checkout (Hotmart)</h4>
+                      <p className="mp-box-subtitle">Defina o link de checkout seguro da Hotmart onde o cliente efetuará o pagamento da receita.</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mp-options-grid">
-                  {/* Opção 1: Automático */}
-                  <label className={`mp-option-card ${paymentType === 'automatic' ? 'selected' : ''}`}>
-                    <div className="mp-option-radio-header">
-                      <input 
-                        type="radio" 
-                        name="payment_mode_choice" 
-                        value="automatic" 
-                        checked={paymentType === 'automatic'}
-                        onChange={() => setPaymentType('automatic')}
-                        disabled={isUploading}
-                      />
-                      <div className="mp-option-badge-wrap">
-                        <Zap size={14} className="mp-badge-icon" />
-                        <span className="mp-option-title">1. Checkout Automático (API)</span>
-                      </div>
-                    </div>
-                    <p className="mp-option-desc">
-                      O cliente compra diretamente na sua loja usando o checkout integrado. Cobrança transparente com liberação imediata do PDF após o pagamento.
-                    </p>
-                    <div className="mp-option-features">
-                      <span className="mp-feat-tag"><CheckCircle2 size={12} /> PIX Copia & Cola</span>
-                      <span className="mp-feat-tag"><CheckCircle2 size={12} /> Cartão de Crédito</span>
-                      <span className="mp-feat-tag"><CheckCircle2 size={12} /> Liberação Instantânea</span>
-                    </div>
-                  </label>
+                {/* Campo Hotmart Link */}
+                <div className="mp-link-input-container" style={{ borderLeft: '4px solid #F04E23', marginTop: '10px' }}>
+                  <div className="mp-link-header-row">
+                    <label className="form-label" style={{ fontWeight: 'bold', margin: 0, color: '#9a3412', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Flame size={18} style={{ color: '#F04E23' }} />
+                      Link de Pagamento / Checkout da Hotmart *
+                    </label>
+                  </div>
 
-                  {/* Opção 2: Link Direto MP */}
-                  <label className={`mp-option-card ${paymentType === 'mp_link' ? 'selected' : ''}`}>
-                    <div className="mp-option-radio-header">
-                      <input 
-                        type="radio" 
-                        name="payment_mode_choice" 
-                        value="mp_link" 
-                        checked={paymentType === 'mp_link'}
-                        onChange={() => setPaymentType('mp_link')}
-                        disabled={isUploading}
-                      />
-                      <div className="mp-option-badge-wrap mp-badge-link">
-                        <ExternalLink size={14} className="mp-badge-icon" />
-                        <span className="mp-option-title">2. Link Direto Mercado Pago</span>
-                      </div>
-                    </div>
-                    <p className="mp-option-desc">
-                      Cole o link de pagamento ou botão gerado no painel do Mercado Pago (ex: <code>mpago.la/...</code>). O cliente clica e vai direto para a tela de pagamento.
-                    </p>
-                    <div className="mp-option-features">
-                      <span className="mp-feat-tag"><CheckCircle2 size={12} /> Link mpago.la</span>
-                      <span className="mp-feat-tag"><CheckCircle2 size={12} /> Botão Mercado Pago</span>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Campo dinâmico quando selecionado Link Direto */}
-                {paymentType === 'mp_link' && (
-                  <div className="mp-link-input-container animate-fade-in">
-                    <div className="mp-link-header-row">
-                      <label className="form-label" style={{ fontWeight: 'bold', margin: 0 }}>
-                        Link / URL de Pagamento do Mercado Pago
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleGenerateMercadoPagoLink}
-                        disabled={isGeneratingMpLink || isUploading || !title || !price}
-                        className="btn-mp-auto-generate"
-                        title="Criar o produto e gerar link oficial no Mercado Pago automaticamente"
-                      >
-                        <Zap size={14} className={isGeneratingMpLink ? 'mp-spin' : ''} />
-                        <span>{isGeneratingMpLink ? 'Criando no Mercado Pago...' : '⚡ Criar e Gerar Link no MP Automaticamente'}</span>
-                      </button>
-                    </div>
-
-                    {mpCreationFeedback && (
-                      <div className={`mp-feedback-box mp-feedback-${mpCreationFeedback.type} animate-fade-in`}>
-                        <CheckCircle2 size={16} />
-                        <span>{mpCreationFeedback.text}</span>
-                      </div>
+                  <div className="mp-input-action-group" style={{ marginTop: '10px' }}>
+                    <input 
+                      type="url" 
+                      className="form-control mp-link-input"
+                      placeholder="https://pay.hotmart.com/... ou https://hotmart.com/..."
+                      value={mpPaymentLink}
+                      onChange={(e) => setMpPaymentLink(e.target.value)}
+                      disabled={isUploading}
+                      style={{ borderColor: '#fed7aa', fontSize: '14px' }}
+                      required={!isFree}
+                    />
+                    {mpPaymentLink && (
+                      <>
+                        <button 
+                          type="button" 
+                          className="btn-mp-action" 
+                          title="Copiar Link"
+                          onClick={() => handleCopyLink(mpPaymentLink)}
+                        >
+                          {copiedLink ? <Check size={16} color="#00a650" /> : <Copy size={16} />}
+                        </button>
+                        <a 
+                          href={mpPaymentLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="btn-mp-action btn-mp-preview"
+                          title="Testar Link em nova aba"
+                          style={{ background: '#F04E23', borderColor: '#F04E23', color: '#fff' }}
+                        >
+                          <ExternalLink size={16} />
+                          <span>Testar Hotmart</span>
+                        </a>
+                      </>
                     )}
-
-                    <div className="mp-input-action-group">
-                      <input 
-                        type="url" 
-                        className="form-control mp-link-input"
-                        placeholder={isGeneratingMpLink ? "Criando produto no Mercado Pago..." : "https://mpago.la/xxxxxx ou clique no botão acima para gerar"}
-                        value={mpPaymentLink}
-                        onChange={(e) => setMpPaymentLink(e.target.value)}
-                        disabled={isUploading || isGeneratingMpLink}
-                      />
-                      {mpPaymentLink && (
-                        <>
-                          <button 
-                            type="button" 
-                            className="btn-mp-action" 
-                            title="Copiar Link"
-                            onClick={() => handleCopyLink(mpPaymentLink)}
-                          >
-                            {copiedLink ? <Check size={16} color="#00a650" /> : <Copy size={16} />}
-                          </button>
-                          <a 
-                            href={mpPaymentLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="btn-mp-action btn-mp-preview"
-                            title="Testar Link em nova aba"
-                          >
-                            <ExternalLink size={16} />
-                            <span>Testar</span>
-                          </a>
-                        </>
-                      )}
-                    </div>
-                    <p className="mp-link-help">
-                      <Info size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                      Você pode clicar em <strong>"⚡ Criar e Gerar Link no MP Automaticamente"</strong> para que o sistema crie o produto no Mercado Pago sozinho, ou colar um link manual já existente.
-                    </p>
                   </div>
-                )}
+                  <p className="mp-link-help" style={{ color: '#7c2d12', marginTop: '8px' }}>
+                    <Info size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                    Cole o link oficial do produto gerado na Hotmart (ex: <code>https://pay.hotmart.com/...</code>). O Amoreja direcionará o comprador automaticamente para essa página ao clicar em comprar.
+                  </p>
+                </div>
               </div>
 
               {/* UPLOADS DE ARQUIVOS */}
@@ -959,7 +679,7 @@ export default function ManageProducts() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                   {/* Arquivo PDF */}
                   <div>
-                    <label className="form-label" style={{fontWeight: 'bold'}}>1. Arquivo PDF (Receita) *</label>
+                    <label className="form-label" style={{fontWeight: 'bold'}}>Arquivo PDF da Receita <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '12px' }}>(Opcional)</span></label>
                     {pdfPath && !pdfFile && <p style={{fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem'}}>Arquivo atual: {pdfPath.split('/').pop()}</p>}
                     <input 
                       type="file" 
@@ -1210,36 +930,35 @@ export default function ManageProducts() {
                     <td>
                       {product.is_free ? (
                         <span className="badge badge-free-tag">🎉 Grátis</span>
-                      ) : product.payment_type === 'mp_link' && product.mp_payment_link ? (
-                        <div className="badge-mp-wrapper">
-                          <span className="badge badge-mp-link" title={product.mp_payment_link}>
-                            <ExternalLink size={12} /> Link MP
-                          </span>
-                          <a 
-                            href={product.mp_payment_link} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="table-link-preview-icon"
-                            title="Abrir link do Mercado Pago"
-                          >
-                            <ExternalLink size={13} />
-                          </a>
-                        </div>
+                      ) : product.mp_payment_link ? (
+                        (() => {
+                          const plat = getPaymentPlatformInfo(product.mp_payment_link);
+                          return (
+                            <div className="badge-mp-wrapper">
+                              <span 
+                                className="badge" 
+                                style={{ background: plat.color, color: plat.textColor, fontWeight: 700 }}
+                                title={product.mp_payment_link}
+                              >
+                                <ExternalLink size={12} /> {plat.badge}
+                              </span>
+                              <a 
+                                href={product.mp_payment_link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="table-link-preview-icon"
+                                title={`Abrir checkout no ${plat.badge}`}
+                              >
+                                <ExternalLink size={13} />
+                              </a>
+                            </div>
+                          );
+                        })()
                       ) : (
                         <div className="badge-mp-wrapper">
-                          <span className="badge badge-mp-auto">
-                            <Zap size={12} /> Checkout API
+                          <span className="badge" style={{ background: '#fff1ec', color: '#F04E23', border: '1px solid #fed7aa', fontWeight: 600 }}>
+                            <Flame size={12} /> Hotmart
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleQuickCreateMercadoPago(product)}
-                            disabled={syncingId === product.id}
-                            className="btn-quick-mp"
-                            title="Inserir esta receita diretamente no Mercado Pago e gerar link"
-                          >
-                            <Zap size={11} className={syncingId === product.id ? 'mp-spin' : ''} />
-                            <span>{syncingId === product.id ? 'Criando...' : '+ Criar no MP'}</span>
-                          </button>
                         </div>
                       )}
                     </td>

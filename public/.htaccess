@@ -1,6 +1,19 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # 1. Proxy transparente para Supabase REST e Auth (VPS)
+  RewriteRule ^supabase-rest/(.*)$ api/supabase_rest_proxy.php?path=$1 [L,QSA]
+  RewriteRule ^supabase-rest/?$ api/supabase_rest_proxy.php?path= [L,QSA]
+  RewriteRule ^supabase-auth/(.*)$ api/supabase_auth_proxy.php?path=$1 [L,QSA]
+  RewriteRule ^supabase-auth/?$ api/supabase_auth_proxy.php?path= [L,QSA]
+
+  # 2. Roteamento das APIs PHP do Mercado Pago e Notificações (Hostinger)
+  RewriteRule ^api/mercadopago/create-pix/?$ api/mercadopago_create_pix.php [L,QSA]
+  RewriteRule ^api/mercadopago/check-status/?$ api/mercadopago_check_status.php [L,QSA]
+  RewriteRule ^api/send-email/?$ api/send_email.php [L,QSA]
+
+  # 3. SPA Fallback para React Router
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

@@ -2,7 +2,11 @@
   "servers": {
     "supabase": {
       "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=slgpkokjcaiprqxpoefr&features=account%2Cdatabase%2Cdebugging%2Cfunctions%2Cdevelopment%2Cbranching%2Cstorage"
+      "url": "https://supabase-supabasecardeneta.1cnep6.easypanel.host/mcp"
+    },
+    "supabase-amoreja": {
+      "type": "http",
+      "url": "https://supabase-supabaseamoreja.1cnep6.easypanel.host/mcp"
     }
   }
 }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { getCachedData, setCachedData } from '../utils/dataCache';
 import ProductCard from '../components/ProductCard';
-import { Search } from 'lucide-react';
+import { Search, Clock, XCircle } from 'lucide-react';
 import './Store.css';
 
 const MOCK_PRODUCTS = [
@@ -32,13 +33,21 @@ const MOCK_PRODUCTS = [
 ];
 
 export default function Store({ onAddToCart }) {
-  const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDifficulty, setSelectedDifficulty] = useState('Todos');
-  const [selectedMaratona, setSelectedMaratona] = useState('Todas');
-  const [maratonas, setMaratonas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedData('store_products_data');
+  const [products, setProducts] = useState(cached?.products || []);
+  const [filteredProducts, setFilteredProducts] = useState(cached?.products || []);
+  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('amoreja_store_search') || '');
+  const [selectedDifficulty, setSelectedDifficulty] = useState(() => localStorage.getItem('amoreja_store_diff') || 'Todos');
+  const [selectedMaratona, setSelectedMaratona] = useState(() => localStorage.getItem('amoreja_store_maratona') || 'Todas');
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('amoreja_recent_searches') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [maratonas, setMaratonas] = useState(cached?.maratonas || []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -68,6 +77,7 @@ export default function Store({ onAddToCart }) {
           const activeProducts = data.filter(p => p.is_active !== false);
           setProducts(activeProducts);
           setFilteredProducts(activeProducts);
+          setCachedData('store_products_data', { products: activeProducts, maratonas: maratonasData || [] });
         } else {
           setProducts(MOCK_PRODUCTS);
           setFilteredProducts(MOCK_PRODUCTS);
@@ -84,8 +94,20 @@ export default function Store({ onAddToCart }) {
     fetchProducts();
   }, []);
 
-  // Filtros em tempo real
+  // Filtros em tempo real e persistência
   useEffect(() => {
+    // Salva termo de busca e filtros para a próxima visita
+    localStorage.setItem('amoreja_store_search', searchTerm);
+    localStorage.setItem('amoreja_store_diff', selectedDifficulty);
+    localStorage.setItem('amoreja_store_maratona', selectedMaratona);
+
+    // Salva no histórico de buscas recentes
+    if (searchTerm.trim().length >= 2) {
+      const updated = [searchTerm.trim(), ...recentSearches.filter(s => s.toLowerCase() !== searchTerm.trim().toLowerCase())].slice(0, 5);
+      setRecentSearches(updated);
+      localStorage.setItem('amoreja_recent_searches', JSON.stringify(updated));
+    }
+
     let result = products;
 
     // Filtro por termo de busca
@@ -111,6 +133,11 @@ export default function Store({ onAddToCart }) {
     setFilteredProducts(result);
   }, [searchTerm, selectedDifficulty, selectedMaratona, products]);
 
+  const handleClearRecent = () => {
+    setRecentSearches([]);
+    localStorage.removeItem('amoreja_recent_searches');
+  };
+
   return (
     <div className="store-page container section-padding">
       <div className="store-header">
@@ -129,7 +156,47 @@ export default function Store({ onAddToCart }) {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
+          {searchTerm && (
+            <button 
+              type="button" 
+              onClick={() => setSearchTerm('')} 
+              className="btn-clear-search-store"
+              title="Limpar busca"
+            >
+              ×
+            </button>
+          )}
         </div>
+
+        {/* Histórico de Buscas Recentes */}
+        {recentSearches.length > 0 && (
+          <div className="recent-searches-row">
+            <div className="recent-searches-label">
+              <Clock size={13} />
+              <span>Buscas recentes:</span>
+            </div>
+            <div className="recent-searches-chips">
+              {recentSearches.map((term, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSearchTerm(term)}
+                  className={`recent-chip ${searchTerm === term ? 'active' : ''}`}
+                >
+                  {term}
+                </button>
+              ))}
+              <button 
+                type="button" 
+                onClick={handleClearRecent} 
+                className="btn-clear-history"
+                title="Limpar histórico"
+              >
+                <XCircle size={13} />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="difficulty-filters">
           <span className="filter-label">Dificuldade:</span>

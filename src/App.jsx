@@ -1,37 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import Home from './pages/Home';
-import Store from './pages/Store';
-import Maratonas from './pages/Maratonas';
-import ProductDetail from './pages/ProductDetail';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Checkout from './pages/Checkout';
-import Journal from './pages/Journal/Journal';
-import JournalArchive from './pages/Journal/JournalArchive';
+import BottomNav from './components/BottomNav';
+import ScrollRestoration from './components/ScrollRestoration';
 
-// Importando páginas administrativas
-import AdminLayout from './pages/Admin/AdminLayout';
-import ManageProducts from './pages/Admin/ManageProducts';
-import ManageOrders from './pages/Admin/ManageOrders';
-import InstagramWeb from './pages/Admin/InstagramWeb';
-import ManageSiteContent from './pages/Admin/ManageSiteContent';
-import InstagramAI from './pages/Admin/InstagramAI';
-import ManageWhatsApp from './pages/Admin/ManageWhatsApp';
-import WhatsAppWeb from './pages/Admin/WhatsAppWeb';
-import ManageSettings from './pages/Admin/ManageSettings';
-import ManageUsers from './pages/Admin/ManageUsers';
-import AdminJournal from './pages/Admin/AdminJournal';
-import FinancialDashboard from './pages/Admin/FinancialDashboard';
-import ManageCoupons from './pages/Admin/ManageCoupons';
-import Help from './pages/Admin/Help';
-import MercadoPagoIntegration from './pages/Admin/MercadoPagoIntegration';
-import PartnerDashboard from './pages/Partner/PartnerDashboard';
-import ColumnistDashboard from './pages/Columnist/ColumnistDashboard';
-import EmailWeb from './pages/Admin/EmailWeb';
+// Componente de carregamento para as rotas
+const PageLoader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+    <div className="loader"></div>
+  </div>
+);
+
+// Lazy loading das páginas para Code-Splitting
+const Home = lazy(() => import('./pages/Home'));
+const Store = lazy(() => import('./pages/Store'));
+const Maratonas = lazy(() => import('./pages/Maratonas'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Login = lazy(() => import('./pages/Login'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const Journal = lazy(() => import('./pages/Journal/Journal'));
+const JournalArchive = lazy(() => import('./pages/Journal/JournalArchive'));
+
+// Lazy loading das páginas administrativas
+const AdminLayout = lazy(() => import('./pages/Admin/AdminLayout'));
+const ManageProducts = lazy(() => import('./pages/Admin/ManageProducts'));
+const ManageOrders = lazy(() => import('./pages/Admin/ManageOrders'));
+const ManageSiteContent = lazy(() => import('./pages/Admin/ManageSiteContent'));
+const ManageWhatsApp = lazy(() => import('./pages/Admin/ManageWhatsApp'));
+const WhatsAppWeb = lazy(() => import('./pages/Admin/WhatsAppWeb'));
+const WhatsAppWebMarcia = lazy(() => import('./pages/Admin/WhatsAppWebMarcia'));
+const ManageSettings = lazy(() => import('./pages/Admin/ManageSettings'));
+const ManageUsers = lazy(() => import('./pages/Admin/ManageUsers'));
+const AdminJournal = lazy(() => import('./pages/Admin/AdminJournal'));
+const FinancialDashboard = lazy(() => import('./pages/Admin/FinancialDashboard'));
+const ManageCoupons = lazy(() => import('./pages/Admin/ManageCoupons'));
+const Help = lazy(() => import('./pages/Admin/Help'));
+const PartnerDashboard = lazy(() => import('./pages/Partner/PartnerDashboard'));
+const ColumnistDashboard = lazy(() => import('./pages/Columnist/ColumnistDashboard'));
+const EmailWeb = lazy(() => import('./pages/Admin/EmailWeb'));
 import ContextHelp from './components/ContextHelp';
 import { X, Trash2, ShoppingBag } from 'lucide-react';
 import './App.css';
@@ -46,6 +55,7 @@ const PrivateRoute = ({ children }) => {
 function MainAppContent() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isHelpPinned, setIsHelpPinned] = useState(() => {
@@ -74,9 +84,9 @@ function MainAppContent() {
   };
 
   const handleAddToCart = (product) => {
-    // Verifica se já está no carrinho (receitas em PDF vende-se apenas uma unidade por cliente)
+    // Se a receita em PDF já estiver no carrinho, abre o carrinho diretamente
     if (cart.some(item => item.id === product.id)) {
-      alert("Esta receita já está no seu carrinho!");
+      setIsCartOpen(true);
       return;
     }
 
@@ -114,58 +124,67 @@ function MainAppContent() {
 
   return (
     <div className="app-layout">
+      <ScrollRestoration />
       <Navbar cartCount={cart.length} onCartClick={() => setIsCartOpen(true)} />
 
         <div className="main-content-wrapper">
-          <Routes>
-            <Route path="/" element={<Home onAddToCart={handleAddToCart} />} />
-            <Route path="/loja" element={<Store onAddToCart={handleAddToCart} />} />
-            <Route path="/maratonas" element={<Maratonas onAddToCart={handleAddToCart} />} />
-            <Route path="/jornal" element={<Journal />} />
-            <Route path="/jornal/arquivo" element={<JournalArchive />} />
-            <Route path="/receita/:id" element={<ProductDetail onAddToCart={handleAddToCart} />} />
-            <Route path="/login" element={<Login />} />
-            
-            {/* Rota Protegida do Cliente */}
-            <Route path="/painel" element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            } />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Home onAddToCart={handleAddToCart} />} />
+              <Route path="/loja" element={<Store onAddToCart={handleAddToCart} />} />
+              <Route path="/maratonas" element={<Maratonas onAddToCart={handleAddToCart} />} />
+              <Route path="/jornal" element={<Journal />} />
+              <Route path="/jornal/arquivo" element={<JournalArchive />} />
+              <Route path="/receita/:id" element={<ProductDetail onAddToCart={handleAddToCart} />} />
+              <Route path="/produto/:id" element={<ProductDetail onAddToCart={handleAddToCart} />} />
+              <Route path="/login" element={<Login />} />
+              
+              {/* Rota Protegida do Cliente */}
+              <Route path="/painel" element={
+                <PrivateRoute>
+                  <Dashboard />
+                </PrivateRoute>
+              } />
 
-            {/* Rota Exclusiva do Canal da Parceira */}
-            {/* Rotas de Parceiros / Colunistas Unificada */}
-            <Route path="/meu-canal" element={<PrivateRoute><PartnerDashboard /></PrivateRoute>} />
-            <Route path="/parceiro" element={<PrivateRoute><PartnerDashboard /></PrivateRoute>} />
-            <Route path="/colunista" element={<PrivateRoute><Navigate to="/meu-canal" replace /></PrivateRoute>} />
+              {/* Rota Exclusiva do Canal da Parceira */}
+              {/* Rotas de Parceiros / Colunistas Unificada */}
+              <Route path="/meu-canal" element={<PrivateRoute><PartnerDashboard /></PrivateRoute>} />
+              <Route path="/parceiro" element={<PrivateRoute><PartnerDashboard /></PrivateRoute>} />
+              <Route path="/colunista" element={<PrivateRoute><Navigate to="/meu-canal" replace /></PrivateRoute>} />
 
-            <Route path="/checkout/:id" element={
-              <PrivateRoute>
-                <Checkout />
-              </PrivateRoute>
-            } />
+              <Route path="/checkout/:id" element={
+                <PrivateRoute>
+                  <Checkout />
+                </PrivateRoute>
+              } />
 
-            {/* Rotas Protegidas do Admin */}
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<ManageProducts />} />
-              <Route path="pedidos" element={<ManageOrders />} />
-              <Route path="instagram" element={<Navigate to="/admin/instagram-chat" replace />} />
-              <Route path="instagram-chat" element={<InstagramWeb defaultTab="direct" />} />
-              <Route path="conteudo" element={<ManageSiteContent />} />
-              <Route path="jornal" element={<AdminJournal />} />
-              <Route path="whatsapp" element={<WhatsAppWeb />} />
-              <Route path="configuracoes" element={<ManageSettings />} />
-              <Route path="usuarios" element={<ManageUsers />} />
-              <Route path="financeiro" element={<FinancialDashboard />} />
-              <Route path="cupons" element={<ManageCoupons />} />
-              <Route path="mercadopago" element={<MercadoPagoIntegration />} />
-              <Route path="emails" element={<EmailWeb />} />
-              <Route path="ajuda" element={<Help />} />
-            </Route>
-          </Routes>
+              {/* Rotas Protegidas do Admin */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<ManageProducts />} />
+                <Route path="produtos" element={<Navigate to="/admin" replace />} />
+                <Route path="pedidos" element={<ManageOrders />} />
+                <Route path="conteudo" element={<ManageSiteContent />} />
+                <Route path="jornal" element={<AdminJournal />} />
+                <Route path="whatsapp" element={<WhatsAppWeb />} />
+                <Route path="whatsapp-marcia" element={<WhatsAppWebMarcia />} />
+                <Route path="configuracoes" element={<ManageSettings />} />
+                <Route path="usuarios" element={<ManageUsers />} />
+                <Route path="financeiro" element={<FinancialDashboard />} />
+                <Route path="cupons" element={<ManageCoupons />} />
+                <Route path="emails" element={<EmailWeb />} />
+                <Route path="ajuda" element={<Help />} />
+              </Route>
+            </Routes>
+          </Suspense>
         </div>
 
-        <Footer />
+        {/* Footer e navegação mobile inferior apenas em páginas públicas (fora do painel admin) */}
+        {!location.pathname.startsWith('/admin') && (
+          <>
+            <Footer />
+            <BottomNav />
+          </>
+        )}
 
         {/* Sliding Shopping Cart Drawer */}
         {isCartOpen && (

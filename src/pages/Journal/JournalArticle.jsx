@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import { ThumbsUp, ThumbsDown, MessageCircle } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MessageCircle, Share2, Sparkles, ExternalLink } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
-export default function JournalArticle({ article, isMainArticle }) {
+export default function JournalArticle({ article, isMainArticle, template }) {
   const { user } = useAuth();
   
   const [likes, setLikes] = useState(article.likes_count || 0);
@@ -91,101 +93,142 @@ export default function JournalArticle({ article, isMainArticle }) {
     }
   };
 
+  const authorName = article.new_amoreja_profiles?.full_name || 'Equipe Amoreja';
+  const authorAvatar = article.new_amoreja_profiles?.avatar_url || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200';
+  const authorInstagram = article.new_amoreja_profiles?.instagram_handle || '@amorejaamigurumi';
+
   return (
-    <article className={`journal-article layout-${article.layout_model} ${isMainArticle ? 'main-article' : ''}`}>
+    <article className={`journal-article layout-${article.layout_model || 'classic'} ${isMainArticle ? 'main-article' : ''}`}>
+      
+      {/* Faixa do Colunista & Citação Fiel à Página 5 */}
+      <div className="article-author-strip">
+        <div className="author-badge-group">
+          <img src={authorAvatar} alt={authorName} className="author-avatar-thumb" />
+          <div className="author-badge-meta">
+            <strong className="author-badge-name">{authorName}</strong>
+            <span className="author-badge-handle">{authorInstagram}</span>
+          </div>
+        </div>
+        <div className="author-quote-badge">
+          "Mais do que criar receitas, eu escolhi criar movimentos que fortalecem pessoas."
+        </div>
+      </div>
+
+      {/* Título Principal & Subtítulo Caligráfico */}
+      <div className="article-title-block">
+        <h2 className="article-headline">{article.title}</h2>
+        {article.subtitle && (
+          <div className="article-calligraphy-subtitle">
+            {article.subtitle}
+          </div>
+        )}
+      </div>
+
+      {/* Imagem de Capa */}
       {article.cover_image && (
         <div className="article-image-wrapper">
           <img src={article.cover_image} alt={article.title} className="article-image" />
         </div>
       )}
       
-      <div className="article-text">
-        <h2 className="article-headline">{article.title}</h2>
-        {article.subtitle && <h3 className="article-subheadline">{article.subtitle}</h3>}
-        
-        <div className="article-byline">
-          Por <strong>{article.new_amoreja_profiles?.full_name || 'Equipe Amoreja'}</strong>
-        </div>
-        
-        <div className="article-body">
-          {article.content.split('\n').map((paragraph, i) => (
-            <p key={i}>{paragraph}</p>
-          ))}
-        </div>
+      {/* Corpo da Matéria em Colunas de Jornal */}
+      <div className="article-text-container">
+        <div 
+          className="article-body"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content.replace(/\n/g, '<br />')) }}
+        />
         
         {article.social_links && article.social_links.length > 0 && (
           <div className="article-socials">
             {article.social_links.map((link, i) => (
-              <a key={i} href={link.url} target="_blank" rel="noreferrer">Ver mais no {link.platform || 'Instagram'}</a>
+              <a key={i} href={link.url} target="_blank" rel="noreferrer" className="article-social-link">
+                <ExternalLink size={14} /> Ver mais no {link.platform || 'Canal'}
+              </a>
             ))}
           </div>
         )}
       </div>
 
+      {/* Bloco de Expediente & Equipe Editorial */}
+      <div className="article-editorial-footer-box">
+        <div className="editorial-credit-item">
+          <span className="editorial-credit-label">IDEALIZAÇÃO, PREPARAÇÃO E ORGANIZAÇÃO</span>
+          <strong className="editorial-credit-name">Marcia Reggiani</strong>
+          <span className="editorial-credit-handle">@amorejaamigurumi</span>
+        </div>
+        <div className="editorial-credit-item">
+          <span className="editorial-credit-label">EDIÇÃO DE TEXTOS E REVISÃO</span>
+          <strong className="editorial-credit-name">Cíntia Ferrer</strong>
+          <span className="editorial-credit-handle">@micajitadesuenos</span>
+        </div>
+        <div className="editorial-credit-item">
+          <span className="editorial-credit-label">CONTATOS OFICIAIS</span>
+          <span className="editorial-credit-info">WhatsApp: (31) 99952.2412</span>
+          <span className="editorial-credit-info">Grupo para designers</span>
+        </div>
+      </div>
+
       {/* Seção de Interações (Curtidas e Comentários) */}
-      <div className="article-interactions" style={{ marginTop: '25px', borderTop: '1px solid #ccc', paddingTop: '15px' }}>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '15px' }}>
-          
+      <div className="article-interactions">
+        <div className="interactions-bar">
           <button 
             onClick={() => handleVote('like')} 
             disabled={userVoted}
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: userVoted ? 'default' : 'pointer', color: userVoted ? '#999' : '#059669', fontSize: '1rem' }}
+            className={`btn-vote like ${userVoted ? 'voted' : ''}`}
           >
-            <ThumbsUp size={18} /> Gostei ({likes})
+            <ThumbsUp size={16} /> Gostei ({likes})
           </button>
           
           <button 
             onClick={() => handleVote('dislike')} 
             disabled={userVoted}
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: userVoted ? 'default' : 'pointer', color: userVoted ? '#999' : '#ea7458', fontSize: '1rem' }}
+            className={`btn-vote dislike ${userVoted ? 'voted' : ''}`}
           >
-            <ThumbsDown size={18} /> Não Gostei ({dislikes})
+            <ThumbsDown size={16} /> Não Gostei ({dislikes})
           </button>
 
           <button 
             onClick={handleToggleComments}
-            style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', color: '#475569', marginLeft: 'auto', fontSize: '1rem' }}
+            className="btn-toggle-comments"
           >
-            <MessageCircle size={18} /> Comentários
+            <MessageCircle size={16} /> Comentários ({comments.length})
           </button>
         </div>
 
         {/* Accordion de Comentários */}
         {showComments && (
-          <div className="comments-section" style={{ background: '#f8fafc', padding: '15px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-            
+          <div className="comments-section">
             {user ? (
-              <form onSubmit={handlePostComment} style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+              <form onSubmit={handlePostComment} className="comment-form">
                 <input 
                   type="text" 
-                  className="form-control" 
-                  placeholder="Deixe um comentário..." 
+                  className="form-control comment-input" 
+                  placeholder="Escreva seu comentário respeitoso..." 
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  style={{ flex: 1 }}
                 />
                 <button type="submit" className="btn btn-primary" disabled={!newComment.trim()}>Enviar</button>
               </form>
             ) : (
-              <div style={{ marginBottom: '20px', fontSize: '0.9rem', color: '#64748b' }}>
-                <a href="/login" style={{ color: '#0369a1', textDecoration: 'underline' }}>Faça login</a> para deixar um comentário.
+              <div className="comment-login-hint">
+                <Link to="/login">Faça login</Link> para deixar um comentário.
               </div>
             )}
 
             {loadingComments ? (
-              <p style={{ fontSize: '0.9rem', color: '#666' }}>Carregando comentários...</p>
+              <p className="comment-loading">Carregando comentários...</p>
             ) : comments.length === 0 ? (
-              <p style={{ fontSize: '0.9rem', color: '#666', fontStyle: 'italic' }}>Nenhum comentário ainda. Seja o primeiro!</p>
+              <p className="comment-empty">Nenhum comentário ainda. Seja a primeira a participar!</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div className="comment-list">
                 {comments.map(c => (
-                  <div key={c.id} style={{ background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                    <strong style={{ display: 'block', fontSize: '0.9rem', color: '#334155', marginBottom: '4px' }}>
-                      {c.new_amoreja_profiles?.full_name || 'Usuário'}
+                  <div key={c.id} className="comment-card">
+                    <strong className="comment-author">
+                      {c.new_amoreja_profiles?.full_name || 'Artesã Leitora'}
                     </strong>
-                    <p style={{ margin: 0, fontSize: '0.95rem', color: '#475569' }}>{c.content}</p>
-                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
-                      {new Date(c.created_at).toLocaleString()}
+                    <p className="comment-text">{c.content}</p>
+                    <span className="comment-date">
+                      {new Date(c.created_at).toLocaleString('pt-BR')}
                     </span>
                   </div>
                 ))}
@@ -194,6 +237,7 @@ export default function JournalArticle({ article, isMainArticle }) {
           </div>
         )}
       </div>
+
     </article>
   );
 }

@@ -358,14 +358,32 @@ Retorne EXATAMENTE um JSON válido (sem markdown, sem explicação):
       let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       // Se tiver Markdown na resposta JSON, limpa
-      rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
       
       let parsed;
       try {
         parsed = JSON.parse(rawText);
       } catch (err) {
-        console.error("Falha ao fazer parse do JSON:", rawText);
-        throw new Error('Resposta inválida da IA — tente novamente.');
+        // Fallback: extrai o primeiro objeto JSON delimitado por { e }
+        const firstBrace = rawText.indexOf('{');
+        const lastBrace = rawText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const candidate = rawText.substring(firstBrace, lastBrace + 1);
+          try {
+            parsed = JSON.parse(candidate);
+          } catch {
+            try {
+              const cleaned = candidate.replace(/,\s*([\]}])/g, '$1');
+              parsed = JSON.parse(cleaned);
+            } catch (innerErr) {
+              console.error("Falha ao fazer parse do JSON após limpeza:", candidate);
+              throw new Error('Resposta inválida da IA — tente novamente.');
+            }
+          }
+        } else {
+          console.error("Falha ao fazer parse do JSON:", rawText);
+          throw new Error('Resposta inválida da IA — tente novamente.');
+        }
       }
 
       // ── ETAPA 2: Pixel (Designer) — Geração de Imagens com IA ──
@@ -530,7 +548,7 @@ Retorne EXATAMENTE um JSON válido (sem markdown, sem explicação):
         try {
           // Chama o proxy seguro do Supabase para buscar o HTML livre de CORS
           const res = await fetch(
-            'https://slgpkokjcaiprqxpoefr.supabase.co/functions/v1/cors-proxy',
+            'https://supabase-supabaseamoreja.1cnep6.easypanel.host/functions/v1/cors-proxy',
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

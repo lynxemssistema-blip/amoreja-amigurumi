@@ -1,7 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Search, MoreVertical, Send, Bot, User, MessageSquare, RefreshCw, Mic, Image as ImageIcon, X as XIcon } from 'lucide-react';
+import { 
+  Search, 
+  MoreVertical, 
+  Send, 
+  Bot, 
+  User, 
+  MessageSquare, 
+  RefreshCw, 
+  Mic, 
+  Image as ImageIcon, 
+  X as XIcon, 
+  QrCode, 
+  Smartphone, 
+  Wifi, 
+  CheckCircle2, 
+  AlertCircle,
+  ArrowLeft,
+  Sparkles
+} from 'lucide-react';
+import WhatsAppConnectionModal from '../../components/WhatsAppConnectionModal';
+import WhatsAppCampaignStudio from '../../components/WhatsAppCampaignStudio';
 import './WhatsAppWeb.css';
 
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
@@ -192,6 +213,7 @@ const Avatar = ({ name, picUrl, jidKey, size = 32 }) => {
 export default function WhatsAppWeb() {
   const [contacts, setContacts] = useState([]);
   const [chatsData, setChatsData] = useState({}); // jid → { pushName, profilePicUrl, lastMessage, timestamp }
+  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'studio'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [waMessages, setWaMessages] = useState([]);
@@ -201,13 +223,42 @@ export default function WhatsAppWeb() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [attachFile, setAttachFile] = useState(null);
+  const [isConnModalOpen, setIsConnModalOpen] = useState(false);
+  const [connInfo, setConnInfo] = useState({ state: 'connecting', number: '31999522412', profileName: null });
 
   const messagesEndRef = useRef(null);
   const selectedItemRef = useRef(null);
   const fileInputRef = useRef(null);
   const audioInputRef = useRef(null);
 
-  useEffect(() => { loadContactsAndChats(); }, []);
+  const checkConnectionStatus = async () => {
+    try {
+      const res = await fetch(`${EVO_URL}/instance/connectionState/${EVO_INSTANCE}`, {
+        headers: { 'apikey': EVO_API_KEY }
+      });
+      const data = await res.json();
+      const state = data.instance?.state || 'close';
+
+      const fetchRes = await fetch(`${EVO_URL}/instance/fetchInstances`, {
+        headers: { 'apikey': EVO_API_KEY }
+      });
+      const instances = await fetchRes.json();
+      const inst = Array.isArray(instances) ? instances.find(i => i.name === EVO_INSTANCE) : null;
+
+      setConnInfo({
+        state,
+        number: inst?.number || '31999522412',
+        profileName: inst?.profileName || null
+      });
+    } catch (e) {
+      console.warn('Erro ao consultar status da instância WhatsApp:', e.message);
+    }
+  };
+
+  useEffect(() => {
+    loadContactsAndChats();
+    checkConnectionStatus();
+  }, []);
 
   useEffect(() => {
     if (selectedContactId) {
@@ -502,29 +553,104 @@ export default function WhatsAppWeb() {
   const activeChatMeta = activeContact ? chatsData[activeContact.jid] : null;
 
   // ═════════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════════
   // RENDER
   // ═════════════════════════════════════════════════════════════════════════
   return (
-    <div className="wa-web-layout">
-      {/* ── SIDEBAR ── */}
-      <div className="wa-sidebar">
-        <div className="wa-sidebar-header">
-          <div className="wa-avatar" style={{ background: '#e0e0e0', color: '#555' }}><User size={20} /></div>
-          <div className="wa-header-actions">
-            <button onClick={async () => { setSyncing(true); await loadContactsAndChats(); setSyncing(false); }}
-              className="wa-icon-btn" title="Atualizar" disabled={syncing}>
-              <RefreshCw size={20} color="#54656f" className={syncing ? 'fa-spin' : ''} />
-            </button>
-            <MoreVertical size={20} color="#54656f" />
+    <div className="wa-app-outer-shell">
+      {/* ── BARRA SUPERIOR UNIFICADA ── */}
+      <header className="wa-unified-topbar">
+        <div className="wa-topbar-brand">
+          <span className="wa-brand-emoji">💬</span>
+          <div className="wa-brand-text">
+            <strong>WhatsApp Amoreja</strong>
+            <small>Atendimento & Marketing</small>
           </div>
         </div>
 
-        <div className="wa-search-bar">
-          <div className="wa-search-input-wrapper">
-            <Search size={15} color="#54656f" />
-            <input type="text" placeholder="Pesquisar contatos..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-          </div>
+        {/* Abas Principais em Destaque */}
+        <div className="wa-topbar-nav">
+          <button 
+            type="button" 
+            className={`wa-nav-tab ${activeView === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveView('chat')}
+          >
+            <MessageSquare size={16} />
+            <span>1. Conversas ao Vivo</span>
+          </button>
+          <button 
+            type="button" 
+            className={`wa-nav-tab studio-tab ${activeView === 'studio' ? 'active' : ''}`}
+            onClick={() => setActiveView('studio')}
+          >
+            <Sparkles size={16} color="#db2777" />
+            <span>2. Estúdio de Convites & IA</span>
+            <span className="wa-tab-pill">Novo</span>
+          </button>
+          <Link 
+            to="/admin/whatsapp-marcia" 
+            className="wa-nav-tab" 
+            style={{ color: '#059669', background: '#ecfdf5', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Ir para o WhatsApp da Márcia (63k conversas)"
+          >
+            <Smartphone size={15} color="#059669" />
+            <span>WhatsApp Márcia</span>
+          </Link>
         </div>
+
+        {/* Status de Conexão WhatsApp */}
+        <div 
+          className="wa-topbar-status" 
+          onClick={() => setIsConnModalOpen(true)}
+          title="Clique para gerenciar conexão ou ler QR Code"
+        >
+          <span className={`wa-status-dot ${connInfo.state === 'open' ? 'online' : 'offline'}`} />
+          <div className="wa-status-info">
+            <span className="wa-status-label">{connInfo.state === 'open' ? 'WhatsApp Online' : 'Desconectado'}</span>
+            <span className="wa-status-phone">
+              {connInfo.number ? `+55 (${connInfo.number.slice(0,2)}) ${connInfo.number.slice(2,7)}-${connInfo.number.slice(7)}` : 'Desconectado'}
+            </span>
+          </div>
+          <button type="button" className="wa-status-btn">
+            <QrCode size={13} />
+            <span>{connInfo.state === 'open' ? 'Aparelho' : 'QR Code'}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ── CONTEÚDO PRINCIPAL ── */}
+      <main className="wa-main-stage">
+        {activeView === 'studio' ? (
+          <div className="wa-studio-container">
+            <WhatsAppCampaignStudio 
+              onBackToChat={() => setActiveView('chat')}
+              initialContacts={contacts}
+            />
+          </div>
+        ) : (
+          <div className={`wa-web-layout ${selectedContactId ? 'chat-open-on-mobile' : 'list-open-on-mobile'}`}>
+            {/* ── SIDEBAR ── */}
+            <div className="wa-sidebar">
+              <div className="wa-sidebar-header">
+                <div className="wa-avatar" style={{ background: '#e0e0e0', color: '#555' }}><User size={20} /></div>
+                <div className="wa-header-actions">
+                  <button onClick={async () => { setSyncing(true); await loadContactsAndChats(); checkConnectionStatus(); setSyncing(false); }}
+                    className="wa-icon-btn" title="Atualizar conversas" disabled={syncing}>
+                    <RefreshCw size={19} color="#54656f" className={syncing ? 'fa-spin' : ''} />
+                  </button>
+                  <button onClick={() => setIsConnModalOpen(true)} className="wa-icon-btn" title="Conexão WhatsApp / QR Code">
+                    <QrCode size={19} color={connInfo.state === 'open' ? '#10b981' : '#ea7458'} />
+                  </button>
+                  <MoreVertical size={19} color="#54656f" />
+                </div>
+              </div>
+
+              <div className="wa-search-bar">
+                <div className="wa-search-input-wrapper">
+                  <Search size={15} color="#54656f" />
+                  <input type="text" placeholder="Pesquisar contatos..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                </div>
+              </div>
 
         <div className="wa-contact-list">
           {loading && contacts.length === 0 ? (
@@ -563,6 +689,15 @@ export default function WhatsAppWeb() {
           <>
             {/* Header */}
             <div className="wa-chat-header">
+              <button 
+                type="button" 
+                className="wa-mobile-back-btn" 
+                onClick={() => setSelectedContactId(null)}
+                title="Voltar para lista de conversas"
+                aria-label="Voltar para lista de conversas"
+              >
+                <ArrowLeft size={20} />
+              </button>
               <Avatar name={activeContact.name} picUrl={activeChatMeta?.profilePicUrl} jidKey={activeContact.jid} size={40} />
               <div className="wa-chat-header-info">
                 <span className="wa-chat-header-name">{activeContact.name}</span>
@@ -714,5 +849,18 @@ export default function WhatsAppWeb() {
         )}
       </div>
     </div>
-  );
+    )}
+  </main>
+
+  <WhatsAppConnectionModal 
+    isOpen={isConnModalOpen} 
+    onClose={() => setIsConnModalOpen(false)}
+    onStatusChange={info => setConnInfo({
+      state: info.state,
+      number: info.instance?.number || '31999522412',
+      profileName: info.instance?.profileName || null
+    })}
+  />
+</div>
+);
 }

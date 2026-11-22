@@ -1,10 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Eye } from 'lucide-react';
+import { ShoppingCart, Eye, ExternalLink } from 'lucide-react';
+import { getPaymentPlatformInfo } from '../utils/paymentPlatform';
 import './ProductCard.css';
 
-export default function ProductCard({ product, onAddToCart }) {
-  const { id, title, description, price, image_url, difficulty } = product;
+export default function ProductCard({ product }) {
+  const { id, title, description, price, image_url, difficulty, mp_payment_link } = product;
 
   // Normaliza o estilo da dificuldade para a classe CSS do badge
   const getDifficultyClass = (diff) => {
@@ -15,6 +16,7 @@ export default function ProductCard({ product, onAddToCart }) {
   };
 
   const maratonaTitle = product.new_amoreja_maratonas?.title;
+  const platform = getPaymentPlatformInfo(mp_payment_link);
 
   return (
     <div className="product-card animate-fade-in">
@@ -28,6 +30,12 @@ export default function ProductCard({ product, onAddToCart }) {
         <div className="card-badge-overlay" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
           <span className={`badge ${getDifficultyClass(difficulty)}`}>
             {difficulty || 'Médio'}
+          </span>
+          <span 
+            className="badge" 
+            style={{ background: platform.color, color: platform.textColor, fontWeight: 700, fontSize: '0.7rem' }}
+          >
+            🔥 {platform.badge}
           </span>
         </div>
       </div>
@@ -44,17 +52,52 @@ export default function ProductCard({ product, onAddToCart }) {
         <div className="card-footer">
           <span className="card-price">R$ {parseFloat(price).toFixed(2)}</span>
           <div className="card-buttons">
-            <Link to={`/receita/${id}`} className="btn-card-icon" title="Ver Detalhes">
+            <Link to={`/receita/${id}`} className="btn-card-icon" title="Ver Detalhes da Receita">
               <Eye size={18} />
             </Link>
-            <button 
-              onClick={() => onAddToCart(product)} 
-              className="btn-card-action"
-              title="Adicionar ao Carrinho"
-            >
-              <ShoppingCart size={16} />
-              Adicionar
-            </button>
+            {mp_payment_link ? (
+              <a 
+                href={mp_payment_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-card-action"
+                style={{ 
+                  background: platform.color, 
+                  color: platform.textColor, 
+                  borderColor: platform.color,
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600
+                }}
+                title={`Comprar no ${platform.badge}`}
+              >
+                <ExternalLink size={14} />
+                Comprar
+              </a>
+            ) : (
+              <a 
+                href={`https://hotmart.com/pt-br/marketplace/produtos?q=${encodeURIComponent(title || 'Amoreja Amigurumi')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-card-action"
+                style={{ 
+                  background: '#F04E23', 
+                  color: '#ffffff', 
+                  borderColor: '#F04E23',
+                  textDecoration: 'none', 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '6px',
+                  fontWeight: 600
+                }}
+                title="Comprar no Hotmart"
+              >
+                <ExternalLink size={14} />
+                Hotmart
+              </a>
+            )}
           </div>
         </div>
       </div>

@@ -612,3 +612,38 @@
   color: #736763;
   font-size: 0.95rem;
 }
+
+/* Responsividade Mobile para Maratonas */
+@media (max-width: 768px) {
+  .maratonas-header {
+    padding: 30px 15px 20px;
+  }
+  .maratonas-main-title {
+    font-size: 1.75rem;
+  }
+  .maratonas-main-desc {
+    font-size: 0.92rem;
+    margin-bottom: 18px;
+  }
+  .maratonas-list-section {
+    padding: 30px 10px 50px;
+  }
+  .maratona-card-info {
+    padding: 20px 16px;
+    gap: 12px;
+  }
+  .maratona-card-title {
+    font-size: 1.35rem;
+  }
+  .maratona-card-visual {
+    height: 200px;
+    min-height: 200px;
+  }
+  .maratona-related-recipes {
+    padding: 20px 14px;
+  }
+  .btn-maratona-action {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../../supabaseClient';
-import { Save, Settings as SettingsIcon, CreditCard, Info, ExternalLink, Zap, Mail, Server, ShieldCheck, CheckCircle2, Send } from 'lucide-react';
+import { Save, Settings as SettingsIcon, CreditCard, Info, ExternalLink, Zap, Mail, Server, ShieldCheck, CheckCircle2, Send, MessageSquare, QrCode, Flame } from 'lucide-react';
+import WhatsAppConnectionModal from '../../components/WhatsAppConnectionModal';
 import './ManageSettings.css';
 
 export default function ManageSettings() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isWaModalOpen, setIsWaModalOpen] = useState(false);
   
   // Email Hostinger Settings
   const [emailAddress, setEmailAddress] = useState('amoreja@amoreja.com.br');
@@ -200,16 +202,36 @@ export default function ManageSettings() {
         </div>
       </div>
 
-      {/* SEÇÃO: FORMAS DE PAGAMENTO MERCADO PAGO / CHECKOUT TRANSPARENTE */}
-      <div className="product-form-card" style={{ maxWidth: '600px', borderLeft: '4px solid #009ee3' }}>
+      {/* SEÇÃO: PLATAFORMA DE PAGAMENTO HOTMART */}
+      <div className="product-form-card" style={{ maxWidth: '600px', borderLeft: '4px solid #F04E23' }}>
         <div className="form-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3><CreditCard size={18} style={{marginRight: '8px', verticalAlign: 'text-bottom', color: '#009ee3'}}/> Formas de Pagamento (Mercado Pago)</h3>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>PIX Instantâneo e Cartão de Crédito integrados com baixa 100% automática.</p>
+            <h3><Flame size={18} style={{marginRight: '8px', verticalAlign: 'text-bottom', color: '#F04E23'}}/> Plataforma de Pagamento Oficial (Hotmart)</h3>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>Todas as receitas digitais são comercializadas com segurança através de links oficiais de checkout da Hotmart.</p>
           </div>
-          <Link to="/admin/mercadopago" className="btn btn-outline" style={{ fontSize: '12px', padding: '6px 12px', whiteSpace: 'nowrap' }}>
-            Configurar Mercado Pago →
+          <Link to="/admin/produtos" className="btn btn-outline" style={{ fontSize: '12px', padding: '6px 12px', whiteSpace: 'nowrap' }}>
+            Gerenciar Receitas →
           </Link>
+        </div>
+      </div>
+
+      {/* SEÇÃO: CONEXÃO WHATSAPP EVOLUTION API (QR CODE & TELEFONE) */}
+      <div className="product-form-card" style={{ maxWidth: '600px', marginTop: '24px', borderLeft: '4px solid #10b981' }}>
+        <div className="form-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3><MessageSquare size={18} style={{marginRight: '8px', verticalAlign: 'text-bottom', color: '#10b981'}}/> Conexão WhatsApp (Evolution API)</h3>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
+              Instância: <strong>{import.meta.env.VITE_EVO_INSTANCE || 'AmorejaAmigurumi'}</strong> • Telefone: <strong style={{ color: '#2563eb' }}>+55 (31) 99952-2412</strong>
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setIsWaModalOpen(true)} 
+            className="btn btn-primary" 
+            style={{ fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <QrCode size={14} /> Conectar / Ler QR Code
+          </button>
         </div>
       </div>
 
@@ -398,20 +420,37 @@ export default function ManageSettings() {
         </div>
       </div>
 
-      {/* Card de Integração com Mercado Pago */}
-      <div className="product-form-card" style={{ maxWidth: '600px', marginTop: '24px', borderLeft: '4px solid #009ee3' }}>
+
+      {/* Card de Conexão WhatsApp / Evolution API */}
+      <div className="product-form-card" style={{ maxWidth: '600px', marginTop: '24px', borderLeft: '4px solid #25D366' }}>
         <div className="form-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3><Zap size={18} style={{marginRight: '8px', verticalAlign: 'text-bottom', color: '#009ee3'}}/> Integração Mercado Pago</h3>
-          <span style={{ fontSize: '12px', background: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '12px', fontWeight: 600 }}>Automatizado</span>
+          <h3><MessageSquare size={18} style={{marginRight: '8px', verticalAlign: 'text-bottom', color: '#25D366'}}/> WhatsApp (Evolution API)</h3>
+          <span style={{ fontSize: '12px', background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '12px', fontWeight: 600 }}>Instância: AmorejaAmigurumi</span>
         </div>
         <p style={{ fontSize: '14px', color: '#64748b', margin: '12px 0 16px 0', lineHeight: 1.5 }}>
-          Configure suas chaves de API (Public Key e Access Token), ative a baixa automática de PIX e pagamentos por Cartão de Crédito.
+          Conecte o WhatsApp escaneando o QR Code diretamente do seu telefone ou confira o status de conexão da instância oficial.
         </p>
-        <Link to="/admin/mercadopago" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
-          <span>Acessar Painel Mercado Pago</span>
-          <ExternalLink size={16} />
-        </Link>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button 
+            type="button" 
+            onClick={() => setIsWaModalOpen(true)}
+            className="btn btn-primary" 
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#25D366', borderColor: '#25D366', color: '#fff', cursor: 'pointer' }}
+          >
+            <QrCode size={16} />
+            <span>Ler QR Code / Conectar Telefone</span>
+          </button>
+          <Link to="/admin/whatsapp" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+            <span>Abrir Painel WhatsApp</span>
+            <ExternalLink size={16} />
+          </Link>
+        </div>
       </div>
+
+      <WhatsAppConnectionModal 
+        isOpen={isWaModalOpen} 
+        onClose={() => setIsWaModalOpen(false)} 
+      />
     </div>
   );
 }

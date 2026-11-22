@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../../supabaseClient';
+import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 import CalendarWidget from './CalendarWidget';
 import JournalArticle from './JournalArticle';
 import './Journal.css';
@@ -19,8 +19,40 @@ export default function Journal() {
     fetchJournalData();
   }, []);
 
-  const fetchJournalData = async () => {
+  async function fetchJournalData() {
     setLoading(true);
+
+    if (!isSupabaseConfigured()) {
+      // MOCK DATA PARA MODO DEMONSTRAÇÃO
+      setTimeout(() => {
+        setArticles([
+          {
+            id: 'mock-art-1',
+            title: 'Boas Vindas ao Jornal Amoreja!',
+            subtitle: 'O lugar onde as artesãs compartilham suas histórias.',
+            content: '<p>Este é um artigo de exemplo. Se você está vendo isso, o sistema está rodando em <strong>Modo Demo</strong> (sem banco de dados configurado). Para ver matérias reais, conecte o Supabase.</p>',
+            start_date: new Date().toISOString(),
+            end_date: new Date(Date.now() + 86400000 * 30).toISOString(),
+            status: 'approved',
+            new_amoreja_profiles: { full_name: 'Amoreja Equipe' },
+            likes_count: 12,
+            dislikes_count: 0
+          }
+        ]);
+        setEvents([
+          {
+            id: 'mock-evt-1',
+            title: 'Maratona Amigurumi',
+            description: 'Evento online de criação.',
+            event_date: new Date(Date.now() + 86400000 * 5).toISOString(),
+            status: 'approved'
+          }
+        ]);
+        setLoading(false);
+      }, 800);
+      return;
+    }
+
     try {
       const today = new Date().toISOString();
       
@@ -82,15 +114,32 @@ export default function Journal() {
     <div className="journal-page">
       <div className="journal-container">
         
-        {/* Cabeçalho do Jornal */}
+        {/* Barra Superior de Metadados */}
+        <div className="journal-top-bar">
+          <span>@jornaldoamigurumi</span>
+          <span style={{ fontWeight: 800 }}>JORNAL COLABORATIVO</span>
+          <span>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</span>
+        </div>
+
+        {/* Cabeçalho Principal do Jornal */}
         <header className="journal-header">
-          <div className="journal-meta">
-            <span>EDIÇÃO DIGITAL</span>
-            <span>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          <div className="journal-seal-row">
+            <div className="journal-circle-seal">
+              <span>JORNAL</span>
+              <span style={{ fontSize: '13px' }}>🧶</span>
+              <span>AMIGURUMI</span>
+            </div>
+
+            <h1 className="journal-title">{journalName}</h1>
+
+            <div className="journal-edition-badge">
+              <strong>GUIA & EDIÇÃO DIGITAL</strong>
+              <span>ED. 001/26</span>
+            </div>
           </div>
-          <h1 className="journal-title">{journalName}</h1>
-          <div className="journal-meta-bottom">
-            <span>"O Fio que Conecta Nossas Histórias"</span>
+
+          <div className="journal-motto-strip">
+            "Mais do que criar receitas, eu escolhi criar movimentos que fortalecem pessoas."
           </div>
         </header>
 

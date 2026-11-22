@@ -6,18 +6,60 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Inicialização síncrona a partir do cache local para carregamento instantâneo (0ms)
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('amoreja_auth_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [profile, setProfile] = useState(() => {
+    try {
+      const cached = localStorage.getItem('amoreja_auth_profile');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Se já temos perfil ou usuário em cache, não bloqueamos a interface com loading
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cachedProf = localStorage.getItem('amoreja_auth_profile');
+      const cachedUsr = localStorage.getItem('amoreja_auth_user');
+      if (cachedProf || cachedUsr) return false;
+    } catch {}
+    return true;
+  });
+
   const [isDemoMode, setIsDemoMode] = useState(false);
+
+  // Helper para identificar administradores mestres
+  const isMasterUserEmail = (emailStr) => {
+    if (!emailStr) return false;
+    const em = emailStr.toLowerCase().trim();
+    return (
+      em.includes('edsonmanoel') ||
+      em.includes('edsonmaneol') ||
+      em.startsWith('admin@amoreja')
+    );
+  };
 
   // Carrega e observa o estado de autenticação
   useEffect(() => {
+    // Timeout de segurança máximo de 2 segundos para nunca travar a aplicação
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 2000);
+
     if (!isSupabaseConfigured()) {
       console.warn("Supabase não configurado. Entrando em Modo Demo (Simulado).");
       setIsDemoMode(true);
+      clearTimeout(safetyTimer);
       
-      // Simula usuário logado como administrador para demonstração de estudo
       const demoUser = {
         id: 'demo-user-id',
         email: 'admin@amoreja.com.br',
@@ -27,10 +69,10 @@ export const AuthProvider = ({ children }) => {
         id: 'demo-user-id',
         email: 'admin@amoreja.com.br',
         full_name: 'Marcia Reggiani (Demo)',
-        is_admin: true
+        is_admin: true,
+        role: 'admin'
       };
       
-      // Salva no localStorage para simular persistência
       const storedUser = localStorage.getItem('demo_user');
       const storedProfile = localStorage.getItem('demo_profile');
       if (storedUser && storedProfile) {
@@ -47,71 +89,119 @@ export const AuthProvider = ({ children }) => {
     }
 
     // Configuração com Supabase real
+    let isMounted = true;
+
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
+        if (session && session.user && isMounted) {
           setUser(session.user);
-          await fetchProfile(session.user.id);
-        } else {
+          localStorage.setItem('amoreja_auth_user', JSON.stringify(session.user));
+          await fetchProfile(session.user.id, session.user.email);
+        } else if (!session && isMounted) {
+          // Se não há sessão ativa, limpa caches
           setUser(null);
           setProfile(null);
+          localStorage.removeItem('amoreja_auth_user');
+          localStorage.removeItem('amoreja_auth_profile');
         }
       } catch (err) {
         console.error("Erro ao obter sessão:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(safetyTimer);
+        }
       }
     };
 
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setLoading(true);
-      if (session) {
+      if (!isMounted) return;
+      if (session && session.user) {
         setUser(session.user);
-        await fetchProfile(session.user.id);
+        localStorage.setItem('amoreja_auth_user', JSON.stringify(session.user));
+        await fetchProfile(session.user.id, session.user.email);
       } else {
         setUser(null);
         setProfile(null);
+        localStorage.removeItem('amoreja_auth_user');
+        localStorage.removeItem('amoreja_auth_profile');
       }
       setLoading(false);
+      clearTimeout(safetyTimer);
     });
 
     return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
       subscription?.unsubscribe();
     };
   }, []);
 
-  const fetchProfile = async (userId) => {
+  const fetchProfile = async (userId, userEmail) => {
     try {
+      const emailToCheck = (userEmail || user?.email || '').toLowerCase().trim();
+      const isMaster = isMasterUserEmail(emailToCheck);
+
       const { data, error } = await supabase
         .from('new_amoreja_profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
       let profileData = data || { id: userId, is_admin: false, role: 'client', user_tags: [] };
 
-      // Fallback transparente em new_amoreja_settings se colunas de parceira forem salvas em settings
-      try {
-        const { data: partnerSetting } = await supabase
-          .from('new_amoreja_settings')
-          .select('value')
-          .eq('key', `partner_cfg_${userId}`)
-          .maybeSingle();
-        
-        if (partnerSetting && partnerSetting.value) {
-          const parsedPartner = JSON.parse(partnerSetting.value);
-          profileData = { ...profileData, ...parsedPartner };
-        }
-      } catch (_) {}
+      // Se for o Super Admin Edson Manoel ou admin oficial, garante todas as permissões
+      if (isMaster || profileData?.is_admin === true || profileData?.role === 'admin') {
+        profileData = {
+          ...profileData,
+          email: profileData.email || emailToCheck || 'edsonmanoel2012@gmail.com',
+          full_name: profileData.full_name || 'Edson Manoel (Super Admin)',
+          is_admin: true,
+          role: 'admin',
+          partner_status: 'approved',
+          user_tags: Array.from(new Set([...(profileData.user_tags || []), 'admin', 'master', 'colunista', 'maratonista', 'parceira']))
+        };
+      }
+
+      // Fallback em new_amoreja_settings apenas se não for admin
+      if (!isMaster && profileData.role === 'partner') {
+        try {
+          const { data: partnerSetting } = await supabase
+            .from('new_amoreja_settings')
+            .select('value')
+            .eq('key', `partner_cfg_${userId}`)
+            .maybeSingle();
+          
+          if (partnerSetting && partnerSetting.value) {
+            const parsedPartner = JSON.parse(partnerSetting.value);
+            profileData = { ...profileData, ...parsedPartner };
+          }
+        } catch (_) {}
+      }
 
       setProfile(profileData);
+      localStorage.setItem('amoreja_auth_profile', JSON.stringify(profileData));
     } catch (err) {
       console.error("Erro ao buscar perfil do banco:", err.message);
-      // Fallback em caso de falha de leitura
-      setProfile({ id: userId, is_admin: false, role: 'client', user_tags: [] });
+      const emailToCheck = (userEmail || user?.email || '').toLowerCase().trim();
+      if (isMasterUserEmail(emailToCheck)) {
+        const fallbackAdmin = {
+          id: userId,
+          email: emailToCheck,
+          full_name: 'Edson Manoel (Super Admin)',
+          is_admin: true,
+          role: 'admin',
+          partner_status: 'approved',
+          user_tags: ['admin', 'master', 'colunista', 'maratonista', 'parceira']
+        };
+        setProfile(fallbackAdmin);
+        localStorage.setItem('amoreja_auth_profile', JSON.stringify(fallbackAdmin));
+      } else {
+        setProfile({ id: userId, is_admin: false, role: 'client', user_tags: [] });
+      }
     }
   };
 
@@ -214,9 +304,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
+    setUser(null);
+    setProfile(null);
+    localStorage.removeItem('amoreja_auth_user');
+    localStorage.removeItem('amoreja_auth_profile');
+
     if (isDemoMode) {
-      setUser(null);
-      setProfile(null);
       localStorage.removeItem('demo_user');
       localStorage.removeItem('demo_profile');
       return { error: null };
@@ -251,16 +344,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const isPartner = profile?.role === 'partner' || profile?.is_partner === true || profile?.partner_status === 'approved' || (profile?.user_tags && profile.user_tags.includes('partner'));
-  const partnerStatus = profile?.partner_status || (profile?.role === 'partner' ? 'approved' : 'pending');
+  const emailToCheck = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isSuperAdmin = 
+    emailToCheck.includes('edsonmanoel') || 
+    emailToCheck.includes('edsonmaneol') || 
+    emailToCheck.startsWith('admin@amoreja') ||
+    profile?.is_admin === true ||
+    profile?.role === 'admin';
 
-  const isColumnist = profile?.user_tags && profile.user_tags.includes('colunista');
-  const isMaratonista = profile?.user_tags && profile.user_tags.includes('maratonista');
+  const isAdmin = isSuperAdmin || profile?.is_admin === true || profile?.role === 'admin' || false;
+  const isPartner = isSuperAdmin || profile?.role === 'partner' || profile?.is_partner === true || profile?.partner_status === 'approved' || (profile?.user_tags && profile.user_tags.includes('partner'));
+  const partnerStatus = isSuperAdmin ? 'approved' : (profile?.partner_status || (profile?.role === 'partner' ? 'approved' : 'pending'));
+
+  const isColumnist = isSuperAdmin || (profile?.user_tags && profile.user_tags.includes('colunista'));
+  const isMaratonista = isSuperAdmin || (profile?.user_tags && profile.user_tags.includes('maratonista'));
 
   const value = {
     user,
     profile,
-    isAdmin: profile?.is_admin || profile?.role === 'admin' || false,
+    isAdmin,
     isPartner,
     isColumnist,
     isMaratonista,

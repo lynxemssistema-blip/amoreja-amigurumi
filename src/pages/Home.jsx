@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { getCachedData, setCachedData } from '../utils/dataCache';
 import ProductCard from '../components/ProductCard';
 import InstagramFeed from '../components/InstagramFeed';
+import InstagramIcon from '../components/InstagramIcon';
 import { 
-  Award, 
+  Award,
   BookOpen, 
   Heart, 
   Users, 
@@ -119,11 +121,11 @@ const MOCK_PRODUCTS = [
 ];
 
 const HERO_DEFAULTS = {
-  subtitle: 'Mundo dos Amigurumis',
-  title: 'Transformando fios em abraços quentinhos!',
+  subtitle: 'por Marcia Reggiani',
+  title: 'Amoreja Amigurumi',
   description: 'Crie amigurumis encantadores com receitas detalhadas, passo a passo ilustrado e suporte completo para você tecer amor em cada ponto.',
-  image_url: 'https://images.unsplash.com/photo-1605007493699-af65834f8a00?w=800&auto=format&fit=crop&q=80',
-  button_text: 'Ver Receitas em PDF',
+  image_url: '',
+  button_text: 'Ver projetos',
   button_url: '/loja',
   button2_text: 'Entrar no Grupo',
   button2_url: 'https://chat.whatsapp.com/DvGLoH4qisk2ir4copcYSm?s=hd&p=i&ilr=0',
@@ -156,17 +158,28 @@ export const DEFAULT_FEATURES = [
 ];
 
 export default function Home({ onAddToCart }) {
-  const [featuredProducts, setFeaturedProducts] = useState([]);
-  const [allProducts, setAllProducts] = useState([]);
-  const [hero, setHero] = useState(HERO_DEFAULTS);
+  const cachedHome = getCachedData('home_data');
+  const [featuredProducts, setFeaturedProducts] = useState(cachedHome?.featuredProducts || []);
+  const [allProducts, setAllProducts] = useState(cachedHome?.allProducts || []);
+  const [hero, setHero] = useState(() => {
+    if (cachedHome?.hero) return cachedHome.hero;
+    try {
+      const cached = localStorage.getItem('amoreja_cached_hero');
+      if (cached) return JSON.parse(cached);
+    } catch {
+      // fallback
+    }
+    return HERO_DEFAULTS;
+  });
   const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
-  const [features, setFeatures] = useState({ visible: true, items: DEFAULT_FEATURES });
-  const [loading, setLoading] = useState(true);
+  const [features, setFeatures] = useState(cachedHome?.features || { visible: true, items: DEFAULT_FEATURES });
+  const [loading, setLoading] = useState(!cachedHome);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const carouselRef = useRef(null);
 
   useEffect(() => {
     const fetchAll = async () => {
+      if (!cachedHome) setLoading(true);
       if (!isSupabaseConfigured()) {
         setFeaturedProducts(MOCK_PRODUCTS);
         setAllProducts(MOCK_PRODUCTS);
@@ -198,18 +211,24 @@ export default function Home({ onAddToCart }) {
 
         if (heroData) {
           const extra = heroData.extra_data || {};
-          setHero({
+          const heroObj = {
             subtitle: heroData.subtitle || HERO_DEFAULTS.subtitle,
             title: heroData.title || HERO_DEFAULTS.title,
             description: heroData.description || HERO_DEFAULTS.description,
-            image_url: heroData.image_url || HERO_DEFAULTS.image_url,
+            image_url: heroData.image_url || '',
             button_text: heroData.button_text || HERO_DEFAULTS.button_text,
             button_url: heroData.button_url || HERO_DEFAULTS.button_url,
             button2_text: heroData.button2_text || HERO_DEFAULTS.button2_text,
             button2_url: heroData.button2_url || HERO_DEFAULTS.button2_url,
             image_mode: extra.image_mode || 'fixed',
             selected_product_id: extra.selected_product_id || ''
-          });
+          };
+          setHero(heroObj);
+          try {
+            localStorage.setItem('amoreja_cached_hero', JSON.stringify(heroObj));
+          } catch {
+            // ignore
+          }
         }
 
         // Diferenciais / Features
@@ -221,9 +240,17 @@ export default function Home({ onAddToCart }) {
 
         if (featData) {
           const extra = featData.extra_data || {};
-          setFeatures({
+          const parsedFeatures = {
             visible: extra.visible !== false,
             items: Array.isArray(extra.items) && extra.items.length > 0 ? extra.items : DEFAULT_FEATURES
+          };
+          setFeatures(parsedFeatures);
+
+          setCachedData('home_data', {
+            featuredProducts: featured.length > 0 ? featured : products,
+            allProducts: products,
+            hero: heroObj,
+            features: parsedFeatures
           });
         }
 
@@ -297,7 +324,7 @@ export default function Home({ onAddToCart }) {
               className="hero-image-bg-blur"
               style={{ backgroundImage: `url(${hero.image_url})` }}
             />
-            <img src={hero.image_url} alt="Hero" className="hero-image-front" />
+            <img src={hero.image_url} alt="Hero" className="hero-image-front" fetchPriority="high" decoding="sync" />
           </div>
         );
       }
@@ -326,6 +353,8 @@ export default function Home({ onAddToCart }) {
                 src={prod.image_url}
                 alt={prod.title}
                 className="hero-image-front"
+                fetchPriority={idx === 0 ? "high" : "auto"}
+                loading={idx === 0 ? "eager" : "lazy"}
               />
             </div>
           ))}
@@ -353,19 +382,41 @@ export default function Home({ onAddToCart }) {
             className="hero-image-bg-blur"
             style={{ backgroundImage: `url(${imgSrc})` }}
           />
-          <img src={imgSrc} alt="Hero" className="hero-image-front" />
+          <img 
+            src={imgSrc} 
+            alt="Hero" 
+            className="hero-image-front" 
+            fetchPriority="high" 
+            decoding="sync"
+            onError={(e) => { e.target.onerror = null; e.target.src = '/logo.png'; }}
+          />
         </div>
       );
     }
 
     // Default: 'fixed'
+    if (!hero.image_url) {
+      return (
+        <div className="hero-image-contained-wrapper hero-placeholder-skeleton">
+          <div className="loader"></div>
+        </div>
+      );
+    }
+
     return (
       <div className="hero-image-contained-wrapper">
         <div
           className="hero-image-bg-blur"
           style={{ backgroundImage: `url(${hero.image_url})` }}
         />
-        <img src={hero.image_url} alt="Hero" className="hero-image-front" />
+        <img 
+          src={hero.image_url} 
+          alt="Hero" 
+          className="hero-image-front" 
+          fetchPriority="high" 
+          decoding="sync"
+          onError={(e) => { e.target.onerror = null; e.target.src = '/logo.png'; }}
+        />
       </div>
     );
   };
@@ -378,7 +429,19 @@ export default function Home({ onAddToCart }) {
       <section className="hero-section">
         <div className="container hero-container">
           <div className="hero-content animate-fade-in">
-            <span className="hero-subtitle">{hero.subtitle}</span>
+            <div className="hero-header-line">
+              <span className="hero-subtitle">{hero.subtitle}</span>
+              <a 
+                href="https://www.instagram.com/amorejaamigurumi/" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="hero-instagram-pill"
+                title="Visitar perfil oficial @amorejaamigurumi no Instagram"
+              >
+                <InstagramIcon size={14} />
+                <span>@amorejaamigurumi</span>
+              </a>
+            </div>
             <h1 className="hero-title">{hero.title}</h1>
             <p className="hero-description">{hero.description}</p>
             <div className="hero-buttons">
@@ -484,8 +547,9 @@ export default function Home({ onAddToCart }) {
         </div>
       </section>
 
-      {/* Instagram Feed Integration */}
+      {/* Seção Oficial do Instagram @amorejaamigurumi */}
       <InstagramFeed />
+
     </div>
   );
 }

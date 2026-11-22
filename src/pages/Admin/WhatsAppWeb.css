@@ -1,10 +1,189 @@
 /* =========================================
-   WhatsApp Web Clone - Layout Principal
+   WhatsApp Web Clone - Outer Shell & Layout
    ========================================= */
+.wa-app-outer-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background: #f0f2f5;
+  box-sizing: border-box;
+}
+
+.wa-unified-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+  gap: 12px;
+  z-index: 10;
+}
+
+.wa-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wa-brand-emoji {
+  font-size: 1.4rem;
+}
+
+.wa-brand-text strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.wa-brand-text small {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.wa-topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.wa-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-nav-tab:hover {
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.wa-nav-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.wa-nav-tab.studio-tab.active {
+  color: #db2777;
+}
+
+.wa-tab-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #fce7f3;
+  color: #db2777;
+  padding: 2px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+}
+
+.wa-topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.wa-topbar-status:hover {
+  background: #f1f5f9;
+}
+
+.wa-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wa-status-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.wa-status-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.wa-status-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.wa-status-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.1;
+}
+
+.wa-status-phone {
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.wa-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #e2e8f0;
+  color: #334155;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wa-main-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wa-studio-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #f8fafc;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
 .wa-web-layout {
   display: flex;
   width: 100%;
   height: 100%;
+  flex: 1;
+  min-height: 0;
   background: #f0f2f5;
   overflow: hidden;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -428,3 +607,169 @@
 .fa-spin {
   animation: spin 1s linear infinite;
 }
+
+/* =========================================
+   Barra de alternância (Chat / Estúdio IA)
+   ========================================= */
+.wa-view-switcher-bar {
+  display: flex;
+  background: #f8fafc;
+  padding: 6px 12px;
+  gap: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.wa-tab-toggle {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 38px;
+  touch-action: manipulation;
+}
+
+.wa-tab-toggle:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.wa-tab-toggle.active {
+  background: #00a884;
+  color: #ffffff;
+  border-color: #00a884;
+  box-shadow: 0 1px 3px rgba(0, 168, 132, 0.2);
+}
+
+.wa-tab-toggle.studio-btn.active {
+  background: #fdf2f8;
+  color: #db2777;
+  border-color: #f472b6;
+  box-shadow: 0 1px 3px rgba(219, 39, 119, 0.15);
+}
+
+.wa-chip-new {
+  background: #db2777;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wa-tab-toggle.studio-btn.active .wa-chip-new {
+  background: #db2777;
+  color: #ffffff;
+}
+
+.wa-mobile-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #54656f;
+  cursor: pointer;
+  padding: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.wa-mobile-back-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* =========================================
+   Responsividade: iPhone, Celulares e Telas Pequenas
+   ========================================= */
+@media (max-width: 768px) {
+  .wa-web-layout {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  /* Evita auto-zoom do Safari no iPhone mantendo font-size >= 16px */
+  .wa-search-input-wrapper input,
+  .wa-chat-input,
+  input[type="text"],
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Ajuste de toques suaves */
+  .wa-icon-btn,
+  .wa-tab-toggle,
+  .wa-contact-item {
+    touch-action: manipulation;
+  }
+
+  /* Quando estiver na lista de contatos */
+  .wa-web-layout.list-open-on-mobile .wa-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    display: flex !important;
+    border-right: none;
+  }
+
+  .wa-web-layout.list-open-on-mobile .wa-main {
+    display: none !important;
+  }
+
+  /* Quando uma conversa estiver aberta */
+  .wa-web-layout.chat-open-on-mobile .wa-sidebar {
+    display: none !important;
+  }
+
+  .wa-web-layout.chat-open-on-mobile .wa-main {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Botão voltar visível no mobile */
+  .wa-mobile-back-btn {
+    display: inline-flex !important;
+  }
+
+  .wa-chat-header {
+    padding: 8px 12px !important;
+  }
+
+  .wa-chat-header-name {
+    font-size: 0.92rem !important;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .wa-chat-footer {
+    padding: 8px 10px !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .wa-chat-input {
+    padding: 10px 12px !important;
+  }
+}
+

@@ -1,7 +1,8 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MessageCircle, Heart, ToggleLeft, ToggleRight } from 'lucide-react';
-import Instagram from './InstagramIcon';
+import InstagramIcon from './InstagramIcon';
 import './Footer.css';
 
 export default function Footer() {
@@ -21,9 +22,10 @@ export default function Footer() {
               target="_blank" 
               rel="noopener noreferrer" 
               className="social-icon instagram"
-              aria-label="Siga-nos no Instagram"
+              aria-label="Siga @amorejaamigurumi no Instagram"
+              title="Instagram @amorejaamigurumi"
             >
-              <Instagram size={20} />
+              <InstagramIcon size={20} />
             </a>
             <a 
               href="https://chat.whatsapp.com/DvGLoH4qisk2ir4copcYSm?s=hd&p=i&ilr=0" 
@@ -31,6 +33,7 @@ export default function Footer() {
               rel="noopener noreferrer" 
               className="social-icon whatsapp"
               aria-label="Entre no Grupo das Amorejas"
+              title="Grupo Oficial no WhatsApp"
             >
               <MessageCircle size={20} />
             </a>
@@ -40,9 +43,18 @@ export default function Footer() {
         <div className="footer-links-section">
           <h4 className="footer-section-title">Links Úteis</h4>
           <ul className="footer-links-list">
-            <li><a href="/" className="footer-link">Início</a></li>
-            <li><a href="/loja" className="footer-link">Receitas</a></li>
+            <li><Link to="/" className="footer-link">Início</Link></li>
+            <li><Link to="/loja" className="footer-link">Receitas</Link></li>
             <li><a href="https://www.instagram.com/mda.festivaldasestacoes" target="_blank" rel="noreferrer" className="footer-link">Festival das Estações</a></li>
+            <li>
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent('open-context-help'))} 
+                className="footer-link"
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+              >
+                ❓ Ajuda desta Página
+              </button>
+            </li>
           </ul>
         </div>
 

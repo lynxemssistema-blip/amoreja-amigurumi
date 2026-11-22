@@ -169,6 +169,9 @@ CREATE POLICY "Apenas administradores podem gerenciar posts do Instagram"
     );
 
 -- Políticas para 'settings'
+CREATE POLICY "Qualquer um pode ler configuracoes"
+    ON public.New_Amoreja_settings FOR SELECT USING (true);
+
 CREATE POLICY "Apenas administradores podem gerenciar configurações"
     ON public.New_Amoreja_settings FOR ALL USING (
         EXISTS (

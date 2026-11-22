@@ -450,3 +450,110 @@
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Responsividade Mobile para Meu Painel */
+@media (max-width: 768px) {
+  .dashboard-layout {
+    gap: 1.25rem;
+    margin-top: 1rem;
+  }
+
+  .dashboard-user-card {
+    padding: 1.25rem 1rem 0.85rem;
+  }
+
+  .dashboard-avatar-wrapper {
+    width: 70px;
+    height: 70px;
+    margin-bottom: 0.5rem;
+  }
+
+  .dashboard-user-name {
+    font-size: 1.1rem;
+  }
+
+  .dashboard-nav {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .dashboard-nav-item {
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    justify-content: center;
+  }
+
+  .dashboard-nav-item svg:not(.arrow-icon) {
+    margin-right: 0.4rem;
+  }
+
+  .dashboard-nav-item.active {
+    border-left-color: transparent;
+    border-bottom-color: var(--primary-color);
+  }
+
+  .dashboard-nav-item .arrow-icon {
+    display: none;
+  }
+
+  .dashboard-tab-content {
+    padding: 1.25rem 0.85rem;
+    border-radius: 1rem;
+  }
+
+  .dashboard-content-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.85rem;
+  }
+
+  .dashboard-content-header h2 {
+    font-size: 1.35rem;
+  }
+
+  .order-block-header {
+    padding: 0.85rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .order-meta-info {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .order-items-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .purchased-item-card {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .purchased-item-img {
+    width: 65px;
+    height: 65px;
+  }
+
+  .purchased-item-title {
+    font-size: 0.9rem;
+  }
+
+  .btn-download {
+    padding: 0.45rem;
+    font-size: 0.8rem;
+  }
+}

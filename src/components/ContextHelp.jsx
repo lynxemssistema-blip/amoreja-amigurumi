@@ -113,7 +113,7 @@ const PAGE_HELP_DATA = {
     faqs: [
       {
         q: 'O pagamento com PIX é liberado na hora?',
-        a: 'Sim! O Mercado Pago confirma o pagamento instantaneamente e a tela redireciona para suas receitas em PDF.'
+        a: 'Sim! A confirmação do pagamento é instantânea e o acesso à receita é liberado imediatamente.'
       },
       {
         q: 'Onde encontro minhas receitas após pagar?',
@@ -173,7 +173,7 @@ const PAGE_HELP_DATA = {
     keyFeatures: [
       'Gestão de Produtos: cadastro e edição de receitas com upload de PDF e fotos.',
       'Vendas & Pedidos: auditoria de transações e controle de acessos.',
-      'Mercado Pago: alternância entre Modo Teste e Modo Produção.',
+      'Pagamentos Hotmart: venda de receitas digitais integrada com links da Hotmart.',
       'Central de E-mails: webmail completo com envio e recebimento Hostinger.',
       'Instagram e WhatsApp: automações de atendimento e IA.'
     ],
@@ -194,38 +194,17 @@ const PAGE_HELP_DATA = {
     summary: 'Acompanhamento de todas as compras realizadas na loja com detalhes de comprador, valor, itens e status.',
     keyFeatures: [
       'Listagem de pedidos por status (Aprovado, Pendente, Cancelado).',
-      'Identificação do ID de transação do Mercado Pago.',
+      'Auditoria e controle de transações da loja.',
       'Botão de liberação manual de acesso caso necessário.',
       'Reenvio automático de e-mail com os links das receitas.'
     ],
     tips: [
-      'No Checkout Transparente, os pedidos são aprovados e liberados de forma 100% automática em segundos.'
+      'As vendas e acessos são atualizados de forma 100% automática.'
     ],
     faqs: [
       {
         q: 'Como saber se uma venda gerou comissão para a parceira?',
         a: 'Ao abrir os detalhes do pedido, o sistema exibe os itens comprados e credita automaticamente a comissão no canal da parceira.'
-      }
-    ]
-  },
-  '/admin/mercadopago': {
-    title: 'Integração Mercado Pago & Checkout',
-    category: 'Pagamentos & Finanças',
-    summary: 'Controle das credenciais de API do Mercado Pago, ativação do Checkout Transparente, chaves PIX e alternância Teste/Produção.',
-    keyFeatures: [
-      'Chaves de Teste (Sandbox) e Chaves de Produção (Conta Real).',
-      'Alternância imediata entre Modo Teste e Modo Produção.',
-      'Configuração de Webhooks para notificações automáticas do Mercado Pago.',
-      'Habilitação de PIX Instantâneo e Cartão de Crédito.'
-    ],
-    tips: [
-      'No modo de Produção, o Pix gera QR Code real com chave da Amoreja e cai direto na conta bancária.',
-      'No modo Teste, utilize os cartões fictícios da Sandbox para validar o fluxo.'
-    ],
-    faqs: [
-      {
-        q: 'Onde pego as credenciais do Mercado Pago?',
-        a: 'Acesse mercadopago.com.br/developers → Suas Aplicações → Credenciais de Produção e cole o Public Key e Access Token aqui.'
       }
     ]
   },
@@ -327,7 +306,6 @@ export default function ContextHelp({ isPinned, onTogglePin }) {
     if (path.startsWith('/checkout/')) return PAGE_HELP_DATA['/checkout'];
     if (path.startsWith('/parceiro')) return PAGE_HELP_DATA['/parceiro'];
     if (path.startsWith('/admin/pedidos')) return PAGE_HELP_DATA['/admin/pedidos'];
-    if (path.startsWith('/admin/mercadopago')) return PAGE_HELP_DATA['/admin/mercadopago'];
     if (path.startsWith('/admin/emails')) return PAGE_HELP_DATA['/admin/emails'];
     if (path.startsWith('/admin/usuarios')) return PAGE_HELP_DATA['/admin/usuarios'];
     if (path.startsWith('/admin/conteudo')) return PAGE_HELP_DATA['/admin/conteudo'];
@@ -359,23 +337,16 @@ export default function ContextHelp({ isPinned, onTogglePin }) {
     f => f.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Escuta evento para abrir a ajuda sob demanda
+  useEffect(() => {
+    const handleOpen = () => setIsOpen(true);
+    window.addEventListener('open-context-help', handleOpen);
+    return () => window.removeEventListener('open-context-help', handleOpen);
+  }, []);
+
   return (
     <>
-      {/* Botão Flutuante de Ajuda de Contexto (Canto Inferior Direito) */}
-      {!isOpen && !isPinned && (
-        <button 
-          className="context-help-fab animate-bounce-subtle"
-          onClick={() => setIsOpen(true)}
-          title="Ajuda de Contexto desta Página"
-          aria-label="Abrir Ajuda de Contexto"
-        >
-          <div className="fab-icon-wrapper">
-            <HelpCircle size={24} />
-          </div>
-          <span className="fab-label">Ajuda</span>
-          <span className="fab-pulse-ring"></span>
-        </button>
-      )}
+
 
       {/* Backdrop para quando estiver no modo flutuante (não-fixado) */}
       {isOpen && !isPinned && (

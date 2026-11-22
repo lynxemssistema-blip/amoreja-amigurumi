@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { ArrowLeft, ShoppingCart, Check, Heart, ShieldAlert, ExternalLink, Zap, Download } from 'lucide-react';
+import { getPaymentPlatformInfo } from '../utils/paymentPlatform';
 import './ProductDetail.jsx.css';
 
 const MOCK_PRODUCTS = [
@@ -230,55 +231,78 @@ export default function ProductDetail({ onAddToCart }) {
             </div>
           </div>
 
-          <div className="detail-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            {isFree ? (
-              <Link 
-                to={`/checkout/${product.id}`}
-                className="btn btn-primary btn-add-cart"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#32BCAD' }}
-              >
-                <Download size={18} /> Acessar Receita Grátis
-              </Link>
-            ) : isMpLink ? (
-              <a 
-                href={product.mp_payment_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary btn-add-cart"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#009ee3', borderColor: '#009ee3' }}
-              >
-                <ExternalLink size={18} /> Comprar no Mercado Pago
-              </a>
-            ) : (
+          {(() => {
+            const platform = getPaymentPlatformInfo(product.mp_payment_link);
+            return (
               <>
-                <Link 
-                  to={`/checkout/${product.id}`}
-                  className="btn btn-primary btn-add-cart"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                >
-                  <ShoppingCart size={18} /> Comprar Agora
-                </Link>
-                {onAddToCart && (
-                  <button 
-                    onClick={handleAdd}
-                    className="btn btn-outline"
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    {added ? <Check size={18} /> : <ShoppingCart size={18} />}
-                    {added ? 'Adicionado!' : 'Adicionar ao Carrinho'}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+                <div className="detail-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {isFree ? (
+                    <a 
+                      href={product.pdf_path || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary btn-add-cart"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#32BCAD' }}
+                    >
+                      <Download size={18} /> Acessar Receita Grátis
+                    </a>
+                  ) : product.mp_payment_link ? (
+                    <a 
+                      href={product.mp_payment_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary btn-add-cart"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: platform.color,
+                        borderColor: platform.color,
+                        color: platform.textColor,
+                        fontWeight: '700',
+                        fontSize: '16px',
+                        padding: '14px 28px',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <ExternalLink size={20} /> {platform.label}
+                    </a>
+                  ) : (
+                    <a 
+                      href={`https://hotmart.com/pt-br/marketplace/produtos?q=${encodeURIComponent(product.title || 'Amoreja Amigurumi')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary btn-add-cart"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: '#F04E23',
+                        borderColor: '#F04E23',
+                        color: '#ffffff',
+                        fontWeight: '700',
+                        fontSize: '16px',
+                        padding: '14px 28px',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <ExternalLink size={20} /> Comprar no Hotmart
+                    </a>
+                  )}
+                </div>
 
-          <div className="delivery-alert">
-            <ShieldAlert size={20} className="alert-icon" />
-            <div>
-              <strong>Aviso de Entrega Digital:</strong>
-              <p>Esta receita é um arquivo digital em PDF. Você receberá acesso imediato para download na sua conta após a confirmação do pagamento.</p>
-            </div>
-          </div>
+                <div className="delivery-alert" style={{ marginTop: '20px' }}>
+                  <ShieldAlert size={20} className="alert-icon" />
+                  <div>
+                    <strong>Aviso de Entrega & Pagamento:</strong>
+                    <p>{product.mp_payment_link ? platform.deliveryText : 'Receita digital. Para mais informações, entre em contato.'}</p>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>

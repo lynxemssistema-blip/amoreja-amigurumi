@@ -137,10 +137,16 @@ export default function InstagramWeb({ defaultTab = 'direct' }) {
     }
   };
 
+  const attemptedAccountResolutionRef = useRef(new Set());
+
   // Auto-resolução de ID, Username e Foto de Perfil da conta ativa se estiverem vazios
   useEffect(() => {
     if (!activeAccount || !activeAccount.access_token || !isSupabaseConfigured()) return;
     
+    // Evita executar mais de uma vez para a mesma conta
+    if (attemptedAccountResolutionRef.current.has(activeAccount.id)) return;
+    attemptedAccountResolutionRef.current.add(activeAccount.id);
+
     // Se todos os campos já estiverem preenchidos, não faz nada
     if (activeAccount.instagram_user_id && activeAccount.instagram_username && activeAccount.profile_picture_url) return;
 
@@ -1616,13 +1622,13 @@ export default function InstagramWeb({ defaultTab = 'direct' }) {
                                   <input 
                                     type="text" 
                                     readOnly 
-                                    value={`https://slgpkokjcaiprqxpoefr.supabase.co/functions/v1/instagram-webhook`}
+                                    value={`https://supabase-supabaseamoreja.1cnep6.easypanel.host/functions/v1/instagram-webhook`}
                                     className="form-control font-mono font-11"
                                     style={{ flex: 1, padding: '4px 8px' }}
                                   />
                                   <button 
                                     onClick={() => {
-                                      navigator.clipboard.writeText(`https://slgpkokjcaiprqxpoefr.supabase.co/functions/v1/instagram-webhook`);
+                                      navigator.clipboard.writeText(`https://supabase-supabaseamoreja.1cnep6.easypanel.host/functions/v1/instagram-webhook`);
                                     }}
                                     className="lib-btn lib-btn-save"
                                     style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}

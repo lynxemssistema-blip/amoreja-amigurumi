@@ -17,12 +17,43 @@
   gap: 16px;
 }
 
+.hero-header-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .hero-subtitle {
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 2px;
   color: var(--color-primary-dark);
+}
+
+.hero-instagram-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1.5px solid #fed7aa;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e6683c;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(230, 104, 60, 0.12);
+  transition: all 0.25s ease;
+}
+
+.hero-instagram-pill:hover {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 50%, #dc2743 100%);
+  color: #ffffff;
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 39, 67, 0.3);
 }
 
 .hero-title {
@@ -252,6 +283,30 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 1024px) {
+  .carousel-item {
+    flex: 0 0 33.33%;
+    width: 33.33%;
+    max-width: 33.33%;
+  }
+}
+
+@media (max-width: 768px) {
+  .carousel-item {
+    flex: 0 0 50%;
+    width: 50%;
+    max-width: 50%;
+  }
+}
+
+@media (max-width: 480px) {
+  .carousel-item {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
 /* Forçar que os cards dentro do carrossel tenham imagem menor */
 .carousel-item .card-image-wrapper {
   padding-top: 75%; /* 4:3 ao invés de 1:1 */
@@ -321,7 +376,10 @@
     order: -1;
   }
   .hero-image {
-    height: 300px;
+    height: 220px;
+    max-width: 85%;
+    margin: 0 auto;
+    display: block;
   }
   .features-grid {
     grid-template-columns: 1fr;
@@ -331,7 +389,7 @@
     flex-direction: column;
   }
   .festival-visual {
-    height: 250px;
+    height: 180px;
   }
   .festival-info {
     padding: 30px;
@@ -353,10 +411,19 @@
   background-color: #fafafa;
 }
 
+.hero-placeholder-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #fbebe8 0%, #f7ede8 100%);
+}
+
 @media (max-width: 900px) {
   .hero-image-carousel,
   .hero-image-contained-wrapper {
-    height: 300px;
+    height: 220px;
+    max-width: 85%;
+    margin: 0 auto;
   }
 }
 

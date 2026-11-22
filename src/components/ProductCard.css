@@ -134,3 +134,10 @@
   box-shadow: 0 4px 10px rgba(232, 165, 152, 0.3);
   transform: translateY(-1px);
 }
+
+/* Redução de 30% no tamanho das imagens dos cartões para celular e tablet */
+@media (max-width: 768px) {
+  .card-image-wrapper {
+    padding-top: 70%; /* 30% menor que o 1:1 padrão */
+  }
+}

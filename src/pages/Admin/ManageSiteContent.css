@@ -544,7 +544,8 @@
 }
 
 @media (max-width: 768px) {
-  .cms-page { padding: 16px; }
+  .cms-page { padding: 10px; }
+  .cms-tabs-container { grid-template-columns: 1fr; gap: 10px; }
   .cms-hero-grid { grid-template-columns: 1fr; }
   .hero-preview-card { flex-direction: column; }
   .cms-maratona-card { flex-wrap: wrap; }

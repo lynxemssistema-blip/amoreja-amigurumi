@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { getCachedData, setCachedData } from '../utils/dataCache';
 import { Download, FileText, ShoppingBag, User, Camera, Save, ChevronRight, BookOpen, Star, PenTool, Flag } from 'lucide-react';
-import Instagram from '../components/InstagramIcon';
 import './Dashboard.css';
 
 // Mockup de pedidos comprados no Modo Demo
@@ -28,15 +28,16 @@ const MOCK_PURCHASES = [
 export default function Dashboard() {
   const { user, profile, isAdmin, isPartner, isColumnist, isMaratonista, isDemoMode, updateProfile } = useAuth();
   const navigate = useNavigate();
-  const [orders, setOrders] = useState([]);
-  const [catalogRecipes, setCatalogRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedOrders = getCachedData('dashboard_orders');
+  const cachedCatalog = getCachedData('dashboard_catalog');
+  const [orders, setOrders] = useState(cachedOrders || []);
+  const [catalogRecipes, setCatalogRecipes] = useState(cachedCatalog || []);
+  const [loading, setLoading] = useState(!cachedOrders && !cachedCatalog);
   const [activeTab, setActiveTab] = useState('receitas'); // 'receitas' ou 'perfil'
   const [adminViewMode, setAdminViewMode] = useState('catalog'); // 'personal' | 'catalog' | 'all_clients'
 
   // Perfil State
   const [fullName, setFullName] = useState('');
-  const [instagram, setInstagram] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -45,14 +46,15 @@ export default function Dashboard() {
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
-      setInstagram(profile.instagram_handle || '');
       setAvatarUrl(profile.avatar_url || '');
     }
   }, [profile]);
 
   useEffect(() => {
     const fetchUserOrders = async () => {
-      setLoading(true);
+      if (!cachedOrders && !cachedCatalog) {
+        setLoading(true);
+      }
 
       if (isDemoMode) {
         setOrders(MOCK_PURCHASES);
@@ -72,7 +74,10 @@ export default function Dashboard() {
             .from('new_amoreja_products')
             .select('*')
             .order('created_at', { ascending: false });
-          if (allProds) setCatalogRecipes(allProds);
+          if (allProds) {
+            setCatalogRecipes(allProds);
+            setCachedData('dashboard_catalog', allProds);
+          }
         }
 
         let query = supabase
@@ -117,6 +122,7 @@ export default function Dashboard() {
         }));
 
         setOrders(formatted);
+        setCachedData('dashboard_orders', formatted);
       } catch (err) {
         console.error("Erro ao carregar compras:", err.message);
         setOrders(MOCK_PURCHASES);
@@ -130,7 +136,12 @@ export default function Dashboard() {
 
   const handleDownload = async (title, pdfPath) => {
     if (!isSupabaseConfigured() || !pdfPath) {
-      alert(`Download indisponível no Modo Demo ou arquivo ausente.`);
+      alert(`Download indisponível ou arquivo não especificado.`);
+      return;
+    }
+
+    if (pdfPath.startsWith('http://') || pdfPath.startsWith('https://') || pdfPath.startsWith('/')) {
+      window.open(pdfPath, '_blank');
       return;
     }
     
@@ -142,7 +153,11 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Erro ao gerar link de download:', err.message);
-      alert('Erro ao tentar fazer o download do PDF. ' + err.message);
+      if (err.message?.includes('Object not found') || err.message?.includes('400')) {
+        alert(`O arquivo PDF desta receita ("${title}") ainda não foi anexado no servidor.`);
+      } else {
+        alert('Erro ao tentar fazer o download do PDF: ' + err.message);
+      }
     }
   };
 
@@ -153,7 +168,6 @@ export default function Dashboard() {
     // Atualiza o perfil sem recarregar a foto a menos que já esteja no estado
     const { error } = await updateProfile({
       full_name: fullName,
-      instagram_handle: instagram,
       avatar_url: avatarUrl
     });
 
@@ -183,8 +197,8 @@ export default function Dashboard() {
     setUploadingAvatar(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const fileName = `${user.id}_${Date.now()}.${fileExt}`;
+      const filePath = fileName;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -199,12 +213,14 @@ export default function Dashboard() {
       const newUrl = urlData.publicUrl;
       setAvatarUrl(newUrl);
 
-      // Já salva no perfil do banco
-      await updateProfile({ avatar_url: newUrl });
+      // Salva no perfil do banco
+      const res = await updateProfile({ avatar_url: newUrl });
+      if (res && res.error) throw res.error;
+      alert("Foto de perfil atualizada com sucesso!");
 
     } catch (err) {
       console.error("Erro no upload do avatar:", err);
-      alert("Erro ao enviar a imagem. Tente novamente.");
+      alert("Erro ao enviar a imagem: " + (err.message || 'Tente novamente.'));
     } finally {
       setUploadingAvatar(false);
     }
@@ -425,9 +441,9 @@ export default function Dashboard() {
                   <ShoppingBag size={48} className="empty-icon" />
                   <h3>Sua biblioteca está vazia!</h3>
                   <p>Você ainda não comprou nenhuma receita. Visite nossa loja para encontrar receitas incríveis.</p>
-                  <a href="/loja" className="btn btn-primary">
+                  <Link to="/loja" className="btn btn-primary">
                     Ir para a Loja
-                  </a>
+                  </Link>
                 </div>
               )}
             </div>
@@ -470,21 +486,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <label>Seu Perfil do Instagram (Opcional)</label>
-                    <div className="input-with-icon">
-                      <Instagram size={18} className="input-icon text-pink-600" />
-                      <input 
-                        type="text" 
-                        value={instagram}
-                        onChange={(e) => setInstagram(e.target.value)}
-                        placeholder="ex: @seunome" 
-                        className="form-control"
-                      />
-                    </div>
-                    <small className="form-help">Nos ajuda a identificar você caso prefira atendimento pelo direct.</small>
-                  </div>
-                  
                   <div className="form-actions mt-8">
                     <button 
                       type="submit" 

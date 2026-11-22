@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 .env
+Amoreja_Hostinger_Deploy.zip
+Amoreja_Pronto_Para_Hostinger/
+scratch/
+*.pdf
+*.cjs
+!sync_dist_to_hostinger.cjs
 
 # Editor directories and files
 .vscode/*

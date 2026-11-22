@@ -5,7 +5,7 @@ import ArticleEditor from './ArticleEditor';
 import './ColumnistDashboard.css';
 
 export default function ColumnistDashboard() {
-  const { user, isColumnist, isAdmin } = useAuth();
+  const { user, isColumnist, isAdmin, loading: authLoading } = useAuth();
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState('list'); // 'list' | 'editor'
@@ -49,6 +49,15 @@ export default function ColumnistDashboard() {
     setCurrentView('list');
     fetchMyArticles();
   };
+
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', flexDirection: 'column', gap: '16px' }}>
+        <div className="loader"></div>
+        <p style={{ color: '#64748b' }}>Carregando painel de colunista...</p>
+      </div>
+    );
+  }
 
   if (!isColumnist && !isAdmin) {
     return (

@@ -280,7 +280,7 @@ export default function ManageSiteContent() {
   const saveHero = async () => {
     setHeroSaving(true);
     try {
-      await supabase.from('new_amoreja_site_content').upsert({
+      const heroDataToSave = {
         section_key: 'hero',
         subtitle: hero.subtitle,
         title: hero.title,
@@ -295,7 +295,17 @@ export default function ManageSiteContent() {
           selected_product_id: hero.selected_product_id || ''
         },
         updated_at: new Date().toISOString()
-      }, { onConflict: 'section_key' });
+      };
+      await supabase.from('new_amoreja_site_content').upsert(heroDataToSave, { onConflict: 'section_key' });
+      try {
+        localStorage.setItem('amoreja_cached_hero', JSON.stringify({
+          ...heroDataToSave,
+          image_mode: hero.image_mode || 'fixed',
+          selected_product_id: hero.selected_product_id || ''
+        }));
+      } catch (e) {
+        console.warn('Erro ao salvar cache do hero no admin', e);
+      }
       setHeroSaved(true);
       setTimeout(() => setHeroSaved(false), 3000);
     } catch (e) { alert('Erro ao salvar: ' + e.message); }

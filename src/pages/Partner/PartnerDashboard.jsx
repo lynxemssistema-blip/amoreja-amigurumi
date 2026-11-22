@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../../supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import { 
-  TrendingUp, 
-  BookOpen, 
-  DollarSign, 
-  Percent, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  CreditCard, 
-  ShieldCheck, 
-  Clock, 
-  XCircle, 
-  CheckCircle2, 
-  UploadCloud, 
-  FileText, 
+import {
+  TrendingUp,
+  BookOpen,
+  DollarSign,
+  Percent,
+  Plus,
+  Edit,
+  Trash2,
+  CreditCard,
+  ShieldCheck,
+  Clock,
+  XCircle,
+  CheckCircle2,
+  UploadCloud,
+  FileText,
   ExternalLink,
   Zap,
   Save,
@@ -29,10 +29,12 @@ import {
   MousePointerClick,
   BarChart3,
   ArrowUpRight,
-  Activity
+  Activity,
+  Download
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ArticleEditor from '../Columnist/ArticleEditor';
+import { downloadJournalGuide } from '../../services/journalDocumentService';
 import './PartnerDashboard.css';
 
 export default function PartnerDashboard() {
@@ -66,20 +68,18 @@ export default function PartnerDashboard() {
   const [recipeDifficulty, setRecipeDifficulty] = useState('Médio');
   const [recipeImageUrl, setRecipeImageUrl] = useState('');
   const [recipePdfPath, setRecipePdfPath] = useState('');
+  const [recipePaymentLink, setRecipePaymentLink] = useState('');
   const [recipeCoverFile, setRecipeCoverFile] = useState(null);
   const [recipePdfFile, setRecipePdfFile] = useState(null);
   const [recipeUploading, setRecipeUploading] = useState(false);
   const [recipeUploadStatus, setRecipeUploadStatus] = useState('');
   const [recipeFormMessage, setRecipeFormMessage] = useState(null);
 
-  // Formulário de Dados Bancários & Mercado Pago
+  // Formulário de Dados Bancários para Repasses PIX
   const [pixKey, setPixKey] = useState('');
   const [bankName, setBankName] = useState('');
-  const [mpAccessToken, setMpAccessToken] = useState('');
-  const [mpPublicKey, setMpPublicKey] = useState('');
   const [savingBank, setSavingBank] = useState(false);
   const [bankFeedback, setBankFeedback] = useState(null);
-  const [mpConnected, setMpConnected] = useState(false);
 
   // Solicitação para virar parceira
   const [requestingPartner, setRequestingPartner] = useState(false);
@@ -107,7 +107,7 @@ export default function PartnerDashboard() {
           if (partnerSettings) {
             partnerSettings.forEach(s => {
               const uId = s.key.replace('partner_cfg_', '');
-              try { settingsMap[uId] = JSON.parse(s.value); } catch (_) {}
+              try { settingsMap[uId] = JSON.parse(s.value); } catch (_) { }
             });
           }
 
@@ -117,7 +117,7 @@ export default function PartnerDashboard() {
           })).filter(p => p.role === 'partner' || p.is_partner === true || p.partner_status === 'approved');
 
           setAllPartnersList(mergedPartners);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const targetPartnerId = (isAdmin && selectedPartnerId !== 'all') ? selectedPartnerId : user.id;
@@ -132,10 +132,7 @@ export default function PartnerDashboard() {
       if (targetProfile) {
         setPixKey(targetProfile.partner_pix_key || '');
         setBankName(targetProfile.partner_bank_name || '');
-        setMpAccessToken(targetProfile.partner_mp_access_token || '');
-        setMpPublicKey(targetProfile.partner_mp_public_key || '');
         setCommissionPct(targetProfile.partner_default_commission_pct || 70);
-        setMpConnected(!!targetProfile.partner_mp_access_token);
       }
 
       if (!isSupabaseConfigured()) {
@@ -186,7 +183,7 @@ export default function PartnerDashboard() {
             fetchedRecipes = recipesData.filter(r => r.partner_id === targetPartnerId);
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // Fallback: verificar se há receitas salvas em settings
       try {
@@ -205,30 +202,35 @@ export default function PartnerDashboard() {
             }
           });
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 3. Buscar pedidos concluídos
-      const recipeIds = fetchedRecipes.map(r => r.id);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const validRecipeUuids = fetchedRecipes.map(r => r.id).filter(id => id && uuidRegex.test(id));
       let completedSales = [];
 
-      if (recipeIds.length > 0) {
-        const { data: orderItems } = await supabase
-          .from('new_amoreja_order_items')
-          .select('*, new_amoreja_orders(status, created_at)')
-          .in('product_id', recipeIds);
+      if (validRecipeUuids.length > 0) {
+        try {
+          const { data: orderItems, error: oiError } = await supabase
+            .from('new_amoreja_order_items')
+            .select('*, new_amoreja_orders(status, created_at)')
+            .in('product_id', validRecipeUuids);
 
-        if (orderItems) {
-          completedSales = orderItems.filter(item => item.new_amoreja_orders?.status === 'completed');
-          setTotalSalesCount(completedSales.length);
-          setPartnerOrders(completedSales);
+          if (!oiError && orderItems) {
+            completedSales = orderItems.filter(item => item.new_amoreja_orders?.status === 'completed');
+            setTotalSalesCount(completedSales.length);
+            setPartnerOrders(completedSales);
 
-          const earnings = completedSales.reduce((sum, item) => {
-            const recipe = fetchedRecipes.find(r => r.id === item.product_id);
-            const rate = (recipe?.partner_commission_pct || commissionPct) / 100;
-            return sum + (parseFloat(item.price || 0) * rate);
-          }, 0);
+            const earnings = completedSales.reduce((sum, item) => {
+              const recipe = fetchedRecipes.find(r => r.id === item.product_id);
+              const rate = (recipe?.partner_commission_pct || commissionPct) / 100;
+              return sum + (parseFloat(item.price || 0) * rate);
+            }, 0);
 
-          setTotalEarnings(earnings);
+            setTotalEarnings(earnings);
+          }
+        } catch (e) {
+          console.warn('Erro ao consultar itens de pedidos da parceira:', e);
         }
       } else {
         setTotalSalesCount(0);
@@ -243,7 +245,7 @@ export default function PartnerDashboard() {
 
       const enrichedRecipes = fetchedRecipes.map(r => {
         const sales = completedSales.filter(s => s.product_id === r.id).length;
-        
+
         const storedViews = parseInt(localStorage.getItem(`recipe_views_${r.id}`) || '0');
         const storedCarts = parseInt(localStorage.getItem(`recipe_cart_added_${r.id}`) || '0');
 
@@ -282,11 +284,11 @@ export default function PartnerDashboard() {
         try {
           const targetAuthorId = (isAdmin && selectedPartnerId !== 'all') ? selectedPartnerId : user.id;
           let query = supabase.from('new_amoreja_journal_articles').select('*').order('created_at', { ascending: false });
-          
+
           if (!isAdmin || selectedPartnerId !== 'all') {
             query = query.eq('author_id', targetAuthorId);
           }
-          
+
           const { data: articles } = await query;
           if (articles) setPartnerArticles(articles);
         } catch (err) {
@@ -320,8 +322,8 @@ export default function PartnerDashboard() {
       return;
     }
 
-    if (!recipeEditId && !recipePdfFile && !recipePdfPath) {
-      alert("Por favor, selecione o arquivo PDF da receita.");
+    if (!recipePaymentLink.trim()) {
+      alert("Por favor, informe o Link de Pagamento (Kiwify, Mercado Livre, etc.).");
       return;
     }
 
@@ -350,17 +352,19 @@ export default function PartnerDashboard() {
         price: parseFloat(recipePrice) || 0,
         difficulty: recipeDifficulty,
         image_url: finalImageUrl || 'https://images.unsplash.com/photo-1584992236310-6edddc08acff',
-        pdf_path: finalPdfPath,
-        partner_id: user.id,
-        approval_status: 'pending', // Sempre entra em aprovação para o admin validar
+        pdf_path: finalPdfPath || null,
+        payment_type: 'mp_link',
+        mp_payment_link: recipePaymentLink.trim(),
+        partner_id: selectedPartnerId || user.id,
+        approval_status: isAdmin ? 'approved' : 'pending',
         partner_commission_pct: commissionPct,
-        is_active: false // Fica inativa até o Admin aprovar
+        is_active: isAdmin ? true : false
       };
 
       if (!isSupabaseConfigured()) {
         const newMock = { ...recipePayload, id: recipeEditId || `mock-p-${Date.now()}` };
         setPartnerRecipes([newMock, ...partnerRecipes.filter(r => r.id !== newMock.id)]);
-        setRecipeFormMessage({ type: 'success', text: 'Receita enviada com sucesso para análise do Administrador!' });
+        setRecipeFormMessage({ type: 'success', text: 'Receita enviada com sucesso!' });
         resetRecipeForm();
         return;
       }
@@ -395,9 +399,9 @@ export default function PartnerDashboard() {
         }
       }
 
-      setRecipeFormMessage({ 
-        type: 'success', 
-        text: '🎉 Receita enviada com sucesso! O Administrador irá avaliar o PDF e liberar a venda no site.' 
+      setRecipeFormMessage({
+        type: 'success',
+        text: '🎉 Receita salva com sucesso com link de pagamento configurado!'
       });
       await loadPartnerData();
       resetRecipeForm();
@@ -418,6 +422,7 @@ export default function PartnerDashboard() {
     setRecipeDifficulty(recipe.difficulty || 'Médio');
     setRecipeImageUrl(recipe.image_url || '');
     setRecipePdfPath(recipe.pdf_path || '');
+    setRecipePaymentLink(recipe.mp_payment_link || '');
     setRecipeCoverFile(null);
     setRecipePdfFile(null);
     setIsEditingRecipe(true);
@@ -432,6 +437,7 @@ export default function PartnerDashboard() {
     setRecipeDifficulty('Médio');
     setRecipeImageUrl('');
     setRecipePdfPath('');
+    setRecipePaymentLink('');
     setRecipeCoverFile(null);
     setRecipePdfFile(null);
     setIsEditingRecipe(false);
@@ -446,20 +452,14 @@ export default function PartnerDashboard() {
       const updates = {
         partner_pix_key: pixKey.trim(),
         partner_bank_name: bankName.trim(),
-        partner_mp_access_token: mpAccessToken.trim(),
-        partner_mp_public_key: mpPublicKey.trim(),
         partner_default_commission_pct: parseFloat(commissionPct) || 70
       };
 
       await updateProfile(updates);
 
-      if (mpAccessToken.trim()) {
-        setMpConnected(true);
-      }
-
       setBankFeedback({
         type: 'success',
-        text: 'Dados bancários e configurações do Mercado Pago salvos com sucesso!'
+        text: 'Dados bancários e chave PIX salvos com sucesso!'
       });
       setTimeout(() => setBankFeedback(null), 4000);
     } catch (err) {
@@ -522,7 +522,7 @@ export default function PartnerDashboard() {
             <Sparkles size={32} />
           </div>
           <h2>Canal Exclusivo de Parceiras & Artesãs</h2>
-          
+
           {partnerStatus === 'pending' ? (
             <>
               <div className="partner-badge-status partner-badge-pending" style={{ marginBottom: '16px' }}>
@@ -545,8 +545,8 @@ export default function PartnerDashboard() {
                   {requestMessage.text}
                 </div>
               )}
-              <button 
-                onClick={handleRequestPartnerAccess} 
+              <button
+                onClick={handleRequestPartnerAccess}
                 disabled={requestingPartner}
                 className="btn-request-partner"
               >
@@ -561,7 +561,7 @@ export default function PartnerDashboard() {
 
   return (
     <div className="partner-dashboard-container animate-fade-in">
-      
+
       {/* Header do Canal */}
       <div className="partner-header">
         <div className="partner-title-group">
@@ -588,16 +588,16 @@ export default function PartnerDashboard() {
 
         <div style={{ display: 'flex', gap: '10px' }}>
           {(isPartner || isAdmin) && (
-            <button 
-              onClick={() => { resetRecipeForm(); setIsEditingRecipe(true); setEditingArticle(null); setActiveTab('recipes'); }} 
+            <button
+              onClick={() => { resetRecipeForm(); setIsEditingRecipe(true); setEditingArticle(null); setActiveTab('recipes'); }}
               className="btn-request-partner"
             >
               <Plus size={16} /> Nova Receita em PDF
             </button>
           )}
           {(isColumnist || isAdmin) && (
-            <button 
-              onClick={() => { setEditingArticle(null); setIsEditingRecipe(false); setActiveTab('articles_edit'); }} 
+            <button
+              onClick={() => { setEditingArticle(null); setIsEditingRecipe(false); setActiveTab('articles_edit'); }}
               className="btn btn-primary"
               style={{ padding: '10px 16px', borderRadius: '8px' }}
             >
@@ -622,7 +622,7 @@ export default function PartnerDashboard() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#0369a1' }}>Filtrar Parceira:</label>
-            <select 
+            <select
               value={selectedPartnerId}
               onChange={(e) => setSelectedPartnerId(e.target.value)}
               style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #7dd3fc', background: 'white', fontWeight: 600, color: '#0f172a', fontSize: '13.5px', cursor: 'pointer' }}
@@ -638,21 +638,21 @@ export default function PartnerDashboard() {
 
       {/* Navegação por Abas */}
       <div className="partner-tabs">
-        <button 
+        <button
           className={`partner-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
           <TrendingUp size={16} /> Visão Geral
         </button>
-        <button 
+        <button
           className={`partner-tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
           onClick={() => setActiveTab('analytics')}
         >
           <BarChart3 size={16} /> Métricas & Desempenho {totalCartsCount > 0 && <span className="cart-active-badge" style={{ padding: '2px 7px', fontSize: '11px', marginLeft: '4px' }}>🛒 {totalCartsCount} no carrinho</span>}
         </button>
-        
+
         {(isPartner || isAdmin) && (
-          <button 
+          <button
             className={`partner-tab-btn ${activeTab === 'recipes' ? 'active' : ''}`}
             onClick={() => setActiveTab('recipes')}
           >
@@ -661,7 +661,7 @@ export default function PartnerDashboard() {
         )}
 
         {(isColumnist || isAdmin) && (
-          <button 
+          <button
             className={`partner-tab-btn ${activeTab === 'articles' || activeTab === 'articles_edit' ? 'active' : ''}`}
             onClick={() => { setActiveTab('articles'); setEditingArticle(null); }}
           >
@@ -670,7 +670,7 @@ export default function PartnerDashboard() {
         )}
 
         {(isPartner || isAdmin) && (
-          <button 
+          <button
             className={`partner-tab-btn ${activeTab === 'bank' ? 'active' : ''}`}
             onClick={() => setActiveTab('bank')}
           >
@@ -749,7 +749,7 @@ export default function PartnerDashboard() {
               </div>
               <div style={{ background: '#f8fafc', padding: '18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <strong style={{ color: '#1e293b', display: 'block', marginBottom: '6px' }}>3. Recebimento</strong>
-                Configure sua Chave PIX ou conecte seu Mercado Pago na aba <em>"Dados Bancários"</em> para garantir seus repasses.
+                Configure sua Chave PIX na aba <em>"Dados Bancários"</em> para garantir seus repasses de comissão.
               </div>
             </div>
           </div>
@@ -759,7 +759,7 @@ export default function PartnerDashboard() {
       {/* ABA NOVA: GERENCIAMENTO DE VENDAS, CONVERSÃO E CARRINHOS */}
       {activeTab === 'analytics' && (
         <div className="animate-fade-in">
-          
+
           {/* Banner de Funil de Conversão */}
           <div className="analytics-highlight-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
@@ -827,102 +827,102 @@ export default function PartnerDashboard() {
                 </div>
               </div>
 
-            {partnerRecipes.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                <BookOpen size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                <p style={{ margin: 0, fontSize: '15px' }}>Nenhuma receita cadastrada para análise.</p>
-              </div>
-            ) : (
-              <div className="partner-table-wrapper">
-                <table className="partner-table">
-                  <thead>
-                    <tr>
-                      <th>Receita</th>
-                      <th>Preço</th>
-                      <th>👁️ Visualizações</th>
-                      <th>🛒 No Carrinho Agora</th>
-                      <th>💰 Vendas Concluídas</th>
-                      <th>💵 Comissão Gerada</th>
-                      <th>🎯 Conversão</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {partnerRecipes.map((recipe) => {
-                      const conv = parseFloat(recipe.conversion_rate || 0);
-                      const isHighConv = conv >= 8;
-                      const isMedConv = conv >= 4 && conv < 8;
+              {partnerRecipes.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                  <BookOpen size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                  <p style={{ margin: 0, fontSize: '15px' }}>Nenhuma receita cadastrada para análise.</p>
+                </div>
+              ) : (
+                <div className="partner-table-wrapper">
+                  <table className="partner-table">
+                    <thead>
+                      <tr>
+                        <th>Receita</th>
+                        <th>Preço</th>
+                        <th>👁️ Visualizações</th>
+                        <th>🛒 No Carrinho Agora</th>
+                        <th>💰 Vendas Concluídas</th>
+                        <th>💵 Comissão Gerada</th>
+                        <th>🎯 Conversão</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {partnerRecipes.map((recipe) => {
+                        const conv = parseFloat(recipe.conversion_rate || 0);
+                        const isHighConv = conv >= 8;
+                        const isMedConv = conv >= 4 && conv < 8;
 
-                      return (
-                        <tr key={recipe.id}>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <img src={recipe.image_url} alt="" className="partner-recipe-thumb" />
-                              <div>
-                                <strong>{recipe.title}</strong>
-                                <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                  {recipe.approval_status === 'approved' ? (
-                                    <span style={{ color: '#047857', fontWeight: 600 }}>✅ Publicada na Loja</span>
-                                  ) : (
-                                    <span style={{ color: '#b45309' }}>⏳ Moderação Pendente</span>
-                                  )}
+                        return (
+                          <tr key={recipe.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <img src={recipe.image_url} alt="" className="partner-recipe-thumb" />
+                                <div>
+                                  <strong>{recipe.title}</strong>
+                                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                    {recipe.approval_status === 'approved' ? (
+                                      <span style={{ color: '#047857', fontWeight: 600 }}>✅ Publicada na Loja</span>
+                                    ) : (
+                                      <span style={{ color: '#b45309' }}>⏳ Moderação Pendente</span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
-                          <td>
-                            <strong>R$ {parseFloat(recipe.price).toFixed(2)}</strong>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Eye size={14} color="#64748b" />
-                              <strong style={{ fontSize: '14px' }}>{recipe.views_count || 0}</strong>
-                            </div>
-                          </td>
-                          <td>
-                            {recipe.cart_count > 0 ? (
-                              <span className="cart-active-badge">
-                                <ShoppingCart size={13} /> {recipe.cart_count} cliente(s)
+                            </td>
+                            <td>
+                              <strong>R$ {parseFloat(recipe.price).toFixed(2)}</strong>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Eye size={14} color="#64748b" />
+                                <strong style={{ fontSize: '14px' }}>{recipe.views_count || 0}</strong>
+                              </div>
+                            </td>
+                            <td>
+                              {recipe.cart_count > 0 ? (
+                                <span className="cart-active-badge">
+                                  <ShoppingCart size={13} /> {recipe.cart_count} cliente(s)
+                                </span>
+                              ) : (
+                                <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>0 no carrinho</span>
+                              )}
+                            </td>
+                            <td>
+                              <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                                {recipe.sales_count || 0} un.
                               </span>
-                            ) : (
-                              <span style={{ color: '#94a3b8', fontSize: '12.5px' }}>0 no carrinho</span>
-                            )}
-                          </td>
-                          <td>
-                            <span style={{ fontWeight: 800, color: '#0f172a' }}>
-                              {recipe.sales_count || 0} un.
-                            </span>
-                          </td>
-                          <td>
-                            <strong style={{ color: '#047857', fontSize: '14px' }}>
-                              R$ {(recipe.earned_commission || 0).toFixed(2)}
-                            </strong>
-                          </td>
-                          <td>
-                            <span className={`conversion-rate-badge ${isHighConv ? 'high' : isMedConv ? 'medium' : 'low'}`}>
-                              {recipe.conversion_rate || 0}%
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                            </td>
+                            <td>
+                              <strong style={{ color: '#047857', fontSize: '14px' }}>
+                                R$ {(recipe.earned_commission || 0).toFixed(2)}
+                              </strong>
+                            </td>
+                            <td>
+                              <span className={`conversion-rate-badge ${isHighConv ? 'high' : isMedConv ? 'medium' : 'low'}`}>
+                                {recipe.conversion_rate || 0}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-            {/* Dicas Inteligentes para a Parceira */}
-            <div className="insights-box">
-              <div className="insights-box-icon">
-                <Sparkles size={24} />
-              </div>
-              <div className="insights-box-content">
-                <h4>💡 Dica para Aumentar suas Vendas:</h4>
-                <p>
-                  Receitas com alto número de <strong>visualizações ou itens no carrinho</strong> têm grande interesse das crocheteiras! Divulgue fotos adicionais dos seus amigurumis tecidos nos Stories do Instagram com o link direto da sua receita para incentivar os clientes a finalizarem a compra.
-                </p>
+              {/* Dicas Inteligentes para a Parceira */}
+              <div className="insights-box">
+                <div className="insights-box-icon">
+                  <Sparkles size={24} />
+                </div>
+                <div className="insights-box-content">
+                  <h4>💡 Dica para Aumentar suas Vendas:</h4>
+                  <p>
+                    Receitas com alto número de <strong>visualizações ou itens no carrinho</strong> têm grande interesse das crocheteiras! Divulgue fotos adicionais dos seus amigurumis tecidos nos Stories do Instagram com o link direto da sua receita para incentivar os clientes a finalizarem a compra.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
           )}
 
           {/* Tabela de Desempenho do Jornal (Se Colunista) */}
@@ -962,9 +962,9 @@ export default function PartnerDashboard() {
                           <td style={{ fontWeight: 600 }}>{article.title}</td>
                           <td>
                             <span className={`status-badge status-${article.status}`}>
-                              {article.status === 'approved' ? '✅ Aprovada' : 
-                               article.status === 'pending' ? '⏳ Pendente' : 
-                               article.status === 'rejected' ? '❌ Rejeitada' : '📁 Arquivada'}
+                              {article.status === 'approved' ? '✅ Aprovada' :
+                                article.status === 'pending' ? '⏳ Pendente' :
+                                  article.status === 'rejected' ? '❌ Rejeitada' : '📁 Arquivada'}
                             </span>
                           </td>
                           <td>
@@ -996,7 +996,7 @@ export default function PartnerDashboard() {
             <div className="partner-card">
               <div className="partner-card-header">
                 <h3 className="partner-card-title">
-                  {recipeEditId ? 'Editar Receita' : 'Nova Receita em PDF para Publicação'}
+                  {recipeEditId ? 'Editar Receita' : 'Cadastrar Nova Receita'}
                 </h3>
                 <button onClick={resetRecipeForm} className="btn btn-outline" disabled={recipeUploading}>
                   Cancelar
@@ -1007,8 +1007,8 @@ export default function PartnerDashboard() {
                 <div className="partner-form-grid">
                   <div className="partner-form-group partner-form-full">
                     <label>Título da Receita *</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       className="partner-input"
                       placeholder="Ex: Gigi Love - Girafinha com Óculos"
                       value={recipeTitle}
@@ -1019,9 +1019,9 @@ export default function PartnerDashboard() {
 
                   <div className="partner-form-group">
                     <label>Preço de Venda (R$) *</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
+                    <input
+                      type="number"
+                      step="0.01"
                       className="partner-input"
                       placeholder="29.90"
                       value={recipePrice}
@@ -1032,7 +1032,7 @@ export default function PartnerDashboard() {
 
                   <div className="partner-form-group">
                     <label>Nível de Dificuldade</label>
-                    <select 
+                    <select
                       className="partner-select"
                       value={recipeDifficulty}
                       onChange={(e) => setRecipeDifficulty(e.target.value)}
@@ -1045,7 +1045,7 @@ export default function PartnerDashboard() {
 
                   <div className="partner-form-group partner-form-full">
                     <label>Descrição / Materiais Recomendados</label>
-                    <textarea 
+                    <textarea
                       className="partner-textarea"
                       rows="3"
                       placeholder="Tamanho aproximado, fio utilizado, agulha e detalhes importantes para quem vai tecer."
@@ -1054,41 +1054,65 @@ export default function PartnerDashboard() {
                     />
                   </div>
 
-                  {/* Upload do Arquivo PDF */}
+                  {/* Link de Pagamento Externo (Hotmart) */}
+                  <div className="partner-form-group partner-form-full" style={{ background: '#fff7ed', padding: '18px', borderRadius: '12px', border: '1.5px solid #fed7aa' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#9a3412', fontWeight: '800', fontSize: '14px', marginBottom: '8px' }}>
+                      <ExternalLink size={18} style={{ color: '#F04E23' }} />
+                      Link de Pagamento da Receita (Hotmart) *
+                    </label>
+                    <input
+                      type="url"
+                      className="partner-input"
+                      placeholder="Ex: https://pay.hotmart.com/... ou https://hotmart.com/..."
+                      value={recipePaymentLink}
+                      onChange={(e) => setRecipePaymentLink(e.target.value)}
+                      required
+                      style={{ fontSize: '14px', padding: '12px 14px', borderColor: '#fdba74' }}
+                    />
+                    <small style={{ color: '#7c2d12', fontSize: '12.5px', marginTop: '8px', display: 'block', lineHeight: 1.45 }}>
+                      🔥 <strong>Venda via Hotmart:</strong> Cole aqui o link da sua receita na Hotmart. Ao clicar em <strong>"Comprar"</strong> na loja da Amoreja, o cliente será levado com segurança direto para a página de checkout da Hotmart para efetuar o pagamento e receber o PDF imediatamente.
+                    </small>
+                  </div>
+
+                  {/* Upload da Imagem de Capa */}
                   <div className="partner-form-group">
-                    <label>1. Arquivo da Receita (PDF) *</label>
+                    <label>Imagem de Capa (Foto Principal) *</label>
                     <div className="partner-upload-box">
-                      <input 
-                        type="file" 
-                        accept=".pdf" 
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setRecipeCoverFile(e.target.files[0])}
+                        style={{ display: 'block', width: '100%', fontSize: '13px' }}
+                      />
+                      {recipeImageUrl && !recipeCoverFile && (
+                        <img
+                          src={recipeImageUrl}
+                          alt="Capa"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', marginTop: '6px', border: '1px solid #e2e8f0' }}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Upload do Arquivo PDF (Opcional) */}
+                  <div className="partner-form-group">
+                    <label>Arquivo da Receita em PDF <span style={{ color: '#64748b', fontWeight: 'normal', fontSize: '12px' }}>(Opcional)</span></label>
+                    <div className="partner-upload-box">
+                      <input
+                        type="file"
+                        accept=".pdf"
                         onChange={(e) => setRecipePdfFile(e.target.files[0])}
                         style={{ display: 'block', width: '100%', fontSize: '13px' }}
                       />
                       {recipePdfPath && !recipePdfFile && (
                         <p style={{ fontSize: '12px', color: '#047857', marginTop: '6px' }}>
-                          ✅ PDF já anexado
+                          ✅ PDF já anexado (backup)
                         </p>
                       )}
-                    </div>
-                  </div>
-
-                  {/* Upload da Imagem de Capa */}
-                  <div className="partner-form-group">
-                    <label>2. Imagem de Capa (Foto Principal) *</label>
-                    <div className="partner-upload-box">
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => setRecipeCoverFile(e.target.files[0])}
-                        style={{ display: 'block', width: '100%', fontSize: '13px' }}
-                      />
-                      {recipeImageUrl && !recipeCoverFile && (
-                        <img 
-                          src={recipeImageUrl} 
-                          alt="Capa" 
-                          style={{ width: '45px', height: '45px', objectFit: 'cover', borderRadius: '6px', marginTop: '6px' }}
-                        />
-                      )}
+                      <small style={{ color: '#94a3b8', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                        Opcional: A entrega ao comprador é realizada diretamente pela Hotmart.
+                      </small>
                     </div>
                   </div>
                 </div>
@@ -1122,7 +1146,7 @@ export default function PartnerDashboard() {
                 <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                   <BookOpen size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                   <p style={{ margin: 0, fontSize: '15px' }}>Você ainda não cadastrou nenhuma receita.</p>
-                  <button 
+                  <button
                     onClick={() => { resetRecipeForm(); setIsEditingRecipe(true); }}
                     className="btn btn-primary"
                     style={{ marginTop: '16px' }}
@@ -1152,6 +1176,16 @@ export default function PartnerDashboard() {
                           <td>
                             <strong>{recipe.title}</strong>
                             <div style={{ fontSize: '12px', color: '#64748b' }}>Dificuldade: {recipe.difficulty || 'Médio'}</div>
+                            {recipe.mp_payment_link && (
+                              <a 
+                                href={recipe.mp_payment_link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                style={{ fontSize: '11px', color: '#ea7458', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', textDecoration: 'none', fontWeight: 600 }}
+                              >
+                                <ExternalLink size={11} /> Testar Link de Checkout
+                              </a>
+                            )}
                           </td>
                           <td>
                             <strong>R$ {parseFloat(recipe.price).toFixed(2)}</strong>
@@ -1175,7 +1209,7 @@ export default function PartnerDashboard() {
                             )}
                           </td>
                           <td style={{ textAlign: 'right' }}>
-                            <button 
+                            <button
                               onClick={() => handleEditRecipeClick(recipe)}
                               className="btn-action-icon edit"
                               title="Editar Detalhes"
@@ -1200,22 +1234,47 @@ export default function PartnerDashboard() {
       {activeTab === 'articles' && (
         <div className="animate-fade-in">
           <div className="partner-card">
-            <div className="partner-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="partner-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h3 className="partner-card-title">Minhas Matérias do Jornal</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>Escreva, edite e acompanhe o status de aprovação de suas matérias.</p>
               </div>
-              <button 
-                className="btn btn-primary"
-                onClick={() => { setEditingArticle(null); setActiveTab('articles_edit'); }}
-              >
-                Nova Matéria
-              </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+                  onClick={async () => {
+                    try {
+                      await downloadJournalGuide(user, profile);
+                    } catch (err) {
+                      alert("Erro ao baixar documento: " + err.message);
+                    }
+                  }}
+                  title="Baixar cópia oficial do Guia de Colaboradores"
+                >
+                  <Download size={14} /> Guia em PDF
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { setEditingArticle(null); setActiveTab('articles_edit'); }}
+                >
+                  <Plus size={16} /> Nova Matéria
+                </button>
+              </div>
             </div>
 
             {partnerArticles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                <p>Você ainda não escreveu nenhuma matéria.</p>
+                <FileText size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                <p style={{ margin: 0, fontSize: '15px' }}>Você ainda não escreveu nenhuma matéria.</p>
+                <button
+                  className="btn btn-primary"
+                  style={{ marginTop: '16px' }}
+                  onClick={() => { setEditingArticle(null); setActiveTab('articles_edit'); }}
+                >
+                  Começar a Escrever
+                </button>
               </div>
             ) : (
               <div className="partner-table-wrapper">
@@ -1235,14 +1294,14 @@ export default function PartnerDashboard() {
                         <td>{new Date(article.start_date).toLocaleDateString()} a {new Date(article.end_date).toLocaleDateString()}</td>
                         <td>
                           <span className={`status-badge status-${article.status}`}>
-                            {article.status === 'approved' ? '✅ Aprovada' : 
-                             article.status === 'pending' ? '⏳ Pendente' : 
-                             article.status === 'rejected' ? '❌ Rejeitada' : '📁 Arquivada'}
+                            {article.status === 'approved' ? '✅ Aprovada' :
+                              article.status === 'pending' ? '⏳ Pendente' :
+                                article.status === 'rejected' ? '❌ Rejeitada' : '📁 Arquivada'}
                           </span>
                         </td>
                         <td>
-                          <button 
-                            className="btn btn-outline" 
+                          <button
+                            className="btn btn-outline"
                             style={{ padding: '4px 8px', fontSize: '12px' }}
                             onClick={() => { setEditingArticle(article); setActiveTab('articles_edit'); }}
                           >
@@ -1262,17 +1321,18 @@ export default function PartnerDashboard() {
       {/* ABA: EDITOR DE MATÉRIAS */}
       {activeTab === 'articles_edit' && (
         <div className="animate-fade-in">
-          <ArticleEditor 
-            article={editingArticle} 
-            onBack={() => { setActiveTab('articles'); loadPartnerData(); }} 
+          <ArticleEditor
+            article={editingArticle}
+            onBack={() => { setActiveTab('articles'); loadPartnerData(); }}
             user={user}
+            profile={profile}
           />
         </div>
       )}
 
 
 
-      {/* ABA 3: DADOS BANCÁRIOS & MERCADO PAGO */}
+      {/* ABA 3: DADOS BANCÁRIOS & CHAVE PIX */}
       {activeTab === 'bank' && (
         <div className="animate-fade-in">
           {bankFeedback && (
@@ -1297,8 +1357,8 @@ export default function PartnerDashboard() {
                 <div className="partner-form-grid">
                   <div className="partner-form-group">
                     <label>Chave PIX (CPF, E-mail, Telefone ou Aleatória) *</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       className="partner-input"
                       placeholder="ex: 123.456.789-00 ou seuemail@banco.com"
                       value={pixKey}
@@ -1307,52 +1367,13 @@ export default function PartnerDashboard() {
                   </div>
                   <div className="partner-form-group">
                     <label>Banco / Instituição Financeira</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       className="partner-input"
                       placeholder="ex: Nubank, Banco do Brasil, Inter, etc."
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
                     />
-                  </div>
-                </div>
-              </div>
-
-              {/* Integração Mercado Pago */}
-              <div className="mp-partner-box">
-                <div className="mp-partner-header">
-                  <div>
-                    <h4 style={{ margin: 0, color: '#166534', fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Zap size={18} color="#009ee3" /> Conexão Direta Mercado Pago (Split Automático)
-                    </h4>
-                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#166534' }}>
-                      Conecte sua conta do Mercado Pago para receber suas vendas diretamente no seu saldo.
-                    </p>
-                  </div>
-                  {mpConnected ? (
-                    <span className="status-pill approved">
-                      <CheckCircle2 size={13} /> Mercado Pago Conectado
-                    </span>
-                  ) : (
-                    <span className="status-pill pending">
-                      <Clock size={13} /> Não Conectado
-                    </span>
-                  )}
-                </div>
-
-                <div className="partner-form-grid" style={{ marginTop: '14px' }}>
-                  <div className="partner-form-group partner-form-full">
-                    <label>Access Token do seu Mercado Pago (Opcional para Split Direto)</label>
-                    <input 
-                      type="password" 
-                      className="partner-input"
-                      placeholder="APP_USR-xxxxxx..."
-                      value={mpAccessToken}
-                      onChange={(e) => setMpAccessToken(e.target.value)}
-                    />
-                    <small style={{ color: '#64748b', marginTop: '4px' }}>
-                      Você encontra essa chave no Portal de Desenvolvedores do seu Mercado Pago.
-                    </small>
                   </div>
                 </div>
               </div>
@@ -1400,8 +1421,8 @@ export default function PartnerDashboard() {
                     {partnerOrders.map((orderItem, idx) => (
                       <tr key={idx}>
                         <td>
-                          {orderItem.new_amoreja_orders?.created_at 
-                            ? new Date(orderItem.new_amoreja_orders.created_at).toLocaleDateString('pt-BR') 
+                          {orderItem.new_amoreja_orders?.created_at
+                            ? new Date(orderItem.new_amoreja_orders.created_at).toLocaleDateString('pt-BR')
                             : 'Hoje'}
                         </td>
                         <td>

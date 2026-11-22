@@ -684,7 +684,49 @@ label.toggle-switch-label {
 }
 
 @media (max-width: 768px) {
-  .mp-options-grid {
+  .mp-options-grid,
+  .form-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .col-span-2 {
+    grid-column: span 1;
+  }
+
+  .product-form-card {
+    padding: 15px 12px;
+    margin-bottom: 25px;
+  }
+
+  .admin-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .admin-page-header h2 {
+    font-size: 20px;
+  }
+
+  .admin-page-header button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    padding: 10px 12px;
+    font-size: 13px;
   }
 }

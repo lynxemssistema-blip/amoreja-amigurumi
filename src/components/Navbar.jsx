@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingBag, User, LogOut, Shield } from 'lucide-react';
+import { ShoppingBag, User, LogOut, Shield, Menu, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import './Navbar.css';
 
@@ -10,6 +10,7 @@ export default function Navbar({ cartCount, onCartClick }) {
   const navigate = useNavigate();
 
   const [siteLogo, setSiteLogo] = useState({ url: '' });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Carrega logo do Supabase na montagem
   useEffect(() => {
@@ -31,8 +32,15 @@ export default function Navbar({ cartCount, onCartClick }) {
     const handleLogoUpdate = (e) => {
       if (e.detail) setSiteLogo(e.detail);
     };
+    const handleToggleMenu = () => setIsMobileMenuOpen(prev => !prev);
+
     window.addEventListener('logo-updated', handleLogoUpdate);
-    return () => window.removeEventListener('logo-updated', handleLogoUpdate);
+    window.addEventListener('toggle-mobile-menu', handleToggleMenu);
+
+    return () => {
+      window.removeEventListener('logo-updated', handleLogoUpdate);
+      window.removeEventListener('toggle-mobile-menu', handleToggleMenu);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -58,26 +66,23 @@ export default function Navbar({ cartCount, onCartClick }) {
           )}
         </Link>
 
-        <nav className="navbar-links">
-          <Link to="/" className="nav-link">Início</Link>
+        <nav className={`navbar-links ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+          <div className="mobile-menu-header">
+            <span className="logo-text">Menu</span>
+            <button className="close-menu-btn" onClick={() => setIsMobileMenuOpen(false)}>
+              <X size={24} />
+            </button>
+          </div>
+          <Link to="/" className="nav-link" onClick={() => setIsMobileMenuOpen(false)}>Início</Link>
           <Link to="/loja" className="nav-link">Receitas</Link>
           <Link to="/maratonas" className="nav-link">Maratonas</Link>
           <Link to="/jornal" className="nav-link">Jornal</Link>
           {user && (
-            <Link to="/painel" className="nav-link">Meu Painel</Link>
+            <Link to="/painel" className="nav-link" onClick={() => setIsMobileMenuOpen(false)}>Meu Painel</Link>
           )}
-          {(isPartner || isAdmin) && (
-            <Link to="/parceiro" className="nav-link partner-nav-link" style={{ color: '#ea7458', fontWeight: 'bold' }}>
-              🧵 Canal da Parceira
-            </Link>
-          )}
-          {(isColumnist || isAdmin) && (
-            <Link to="/colunista" className="nav-link" style={{ color: '#2b6cb0', fontWeight: 'bold' }}>
-              ✍️ Área do Colunista
-            </Link>
-          )}
+
           {isAdmin && (
-            <Link to="/admin" className="nav-link admin-link">
+            <Link to="/admin" className="nav-link admin-link" onClick={() => setIsMobileMenuOpen(false)}>
               <Shield size={14} /> Admin
             </Link>
           )}
@@ -104,7 +109,16 @@ export default function Navbar({ cartCount, onCartClick }) {
               Entrar
             </Link>
           )}
+
+          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+            <Menu size={24} />
+          </button>
         </div>
+
+        {/* Overlay do menu mobile */}
+        {isMobileMenuOpen && (
+          <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
+        )}
       </div>
     </header>
   );

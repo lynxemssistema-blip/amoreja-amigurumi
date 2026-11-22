@@ -1,14 +1,30 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Shield, BookOpen, ShoppingCart, ArrowLeft, MessageSquare, Bot, Layout, Settings, Users, TrendingUp, Tag, HelpCircle, Sparkles, CreditCard, Mail, Newspaper } from 'lucide-react';
-import Instagram from '../../components/InstagramIcon';
+import { Shield, BookOpen, ShoppingCart, ArrowLeft, MessageSquare, Bot, Layout, Settings, Users, TrendingUp, Tag, HelpCircle, Sparkles, CreditCard, Mail, Newspaper, Smartphone } from 'lucide-react';
 import './AdminLayout.css';
 
 export default function AdminLayout() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Só exibe loader se estiver validando e AINDA não sabemos se o usuário é administrador
+  // Se já sabemos que é admin (pelo cache instantâneo), abre o painel imediatamente (0ms)
+  if (loading && !isAdmin) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', flexDirection: 'column', gap: '16px' }}>
+        <div className="loader"></div>
+        <p style={{ color: '#64748b', fontSize: '14px' }}>Verificando permissões de Administrador...</p>
+        <button 
+          onClick={() => navigate('/login')} 
+          style={{ background: 'none', border: 'none', color: '#ea7458', fontSize: '13px', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px' }}
+        >
+          Demorando? Clique aqui para fazer login
+        </button>
+      </div>
+    );
+  }
 
   // Proteção simples de rota cliente
   if (!isAdmin) {
@@ -47,9 +63,6 @@ export default function AdminLayout() {
           <Link to="/admin/pedidos" className={`admin-nav-link ${isActive('/admin/pedidos')}`}>
             <ShoppingCart size={16} /> Vendas & Pedidos
           </Link>
-          <Link to="/admin/instagram-chat" className={`admin-nav-link ${isActive('/admin/instagram-chat')}`}>
-            <Instagram size={16} className="ig-pink" /> Central Instagram
-          </Link>
           <Link to="/admin/emails" className={`admin-nav-link ${isActive('/admin/emails')}`}>
             <Mail size={16} /> Central de E-mails
           </Link>
@@ -74,10 +87,10 @@ export default function AdminLayout() {
             <Sparkles size={16} color="#ea7458" /> 🧵 Canal da Parceira
           </Link>
           <Link to="/admin/whatsapp" className={`admin-nav-link ${isActive('/admin/whatsapp')}`}>
-            <MessageSquare size={16} /> WhatsApp Monitor
+            <MessageSquare size={16} /> WhatsApp Amoreja
           </Link>
-          <Link to="/admin/mercadopago" className={`admin-nav-link ${isActive('/admin/mercadopago')}`}>
-            <CreditCard size={16} /> Mercado Pago
+          <Link to="/admin/whatsapp-marcia" className={`admin-nav-link ${isActive('/admin/whatsapp-marcia')}`} style={{ color: isActive('/admin/whatsapp-marcia') ? 'var(--color-primary)' : '#059669', fontWeight: 600 }}>
+            <Smartphone size={16} color="#059669" /> WhatsApp Márcia
           </Link>
           <Link to="/admin/configuracoes" className={`admin-nav-link ${isActive('/admin/configuracoes')}`}>
             <Settings size={16} /> Configurações Gerais
