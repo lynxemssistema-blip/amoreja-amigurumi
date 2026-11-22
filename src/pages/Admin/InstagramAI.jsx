@@ -70,7 +70,7 @@ function mapVideos(videos) {
 // Retorna a imagem como Data URL (base64) ou null se falhar.
 async function generateImageWithGemini(imagePrompt) {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -284,7 +284,7 @@ export default function InstagramAI({ activeAccount }) {
     setActiveAgentStep(0); // 🔍 Luna (Scout): começa pesquisa
 
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
 
       // Contexto do post selecionado como referência de tom da conta
       const contextPost = selectedPost ? `\nEstilo de referência da conta (post anterior): "${selectedPost.caption?.substring(0, 200)}"` : '';
@@ -571,7 +571,7 @@ Retorne EXATAMENTE um JSON válido (sem markdown, sem explicação):
           if (bodyText.trim().length < 50) continue;
 
           // Envia para o Gemini sugerir posts baseados nesse conteúdo
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
           const prompt = `Analise este texto extraído de um site de inspiração/crochê:
 "${bodyText}"
 
@@ -695,7 +695,7 @@ Retorne EXATAMENTE um JSON neste formato:
     try {
       // Cria a legenda inicial baseada na sugestão de ideia
       const promptText = `Crie uma legenda amigável de Instagram para um post de amigurumi com base na ideia: "${insp.suggestion_idea}". Retorne apenas a legenda fofa com emojis e hashtags no final.`;
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1121,7 +1121,7 @@ Retorne APENAS um JSON válido no formato:
   "slides": ["Texto slide 1", "Texto slide 2", "Texto slide 3"] (mesma quantidade de slides atual)
 }`;
 
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1186,7 +1186,7 @@ Retorne APENAS um JSON válido no formato:
 
       setPixelMessages(prev => [...prev, { role: 'agent', text: '⏳ Gerando sua imagem... isso pode levar alguns segundos!', loading: true }]);
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GEMINI_API_KEY}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent?key=${GEMINI_API_KEY}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

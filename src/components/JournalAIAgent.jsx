@@ -130,11 +130,11 @@ export default function JournalAIAgent({ onApplyArticle, currentFormData }) {
   const [generatedAiImage, setGeneratedAiImage] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // Inicializar Gemini
+  // Inicializar Gemini (modelo econômico e rápido)
   const getGeminiModel = () => {
     if (!GEMINI_API_KEY) throw new Error('Chave do Gemini (VITE_GEMINI_API_KEY) não configurada.');
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    return genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+    return genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
   };
 
   // 1. Gerar Matéria Completa com IA Especialista

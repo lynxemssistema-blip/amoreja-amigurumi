@@ -43,9 +43,9 @@ const EVO_API_KEY = import.meta.env.VITE_EVO_API_KEY;
 const EVO_INSTANCE = import.meta.env.VITE_EVO_INSTANCE;
 const EVO_URL = import.meta.env.VITE_EVO_URL;
 
-// Modelos Gemini
-const COPY_MODEL = 'gemini-3.8-flash';
-const NANOBANA_MODEL = 'gemini-2.5-flash-image'; // Nano Banana oficial
+// Modelos Gemini (mais rápidos e econômicos ativos)
+const COPY_MODEL = 'gemini-3.5-flash-lite';
+const NANOBANA_MODEL = 'gemini-3.1-flash-lite-image'; // Nano Banana econômico
 
 const DEFAULT_GROUPS = [
   { id: 'novidades', label: '🧶 Novas Receitas' },

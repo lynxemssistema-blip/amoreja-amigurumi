@@ -41,10 +41,9 @@ const EVO_API_KEY = import.meta.env.VITE_EVO_API_KEY;
 const EVO_INSTANCE = import.meta.env.VITE_EVO_INSTANCE;
 const EVO_URL = import.meta.env.VITE_EVO_URL;
 
-// ─── Modelos com fallback automático ─────────────────────────────────────────
-// Ordem: mais disponível primeiro para evitar esperas desnecessárias
-const AI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-const TRANSCRIPTION_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+// ─── Modelos com fallback automático (melhores e mais econômicos) ────────────
+const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+const TRANSCRIPTION_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
 
 // ─── Cores para avatares ─────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#d32f2f','#c2185b','#7b1fa2','#512da8','#1976d2','#0288d1','#0097a7','#00796b','#388e3c','#f57c00','#5d4037','#546e7a'];

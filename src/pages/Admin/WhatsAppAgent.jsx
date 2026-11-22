@@ -102,9 +102,9 @@ ${waContext}
 ---
 Responda às perguntas do Administrador baseando-se apenas neste histórico. Seja direto e útil.`;
 
-      // 2. Call Gemini API
+      // 2. Call Gemini API (modelo econômico e ativo)
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash-latest",
+        model: "gemini-3.5-flash-lite",
         systemInstruction: systemInstruction 
       });
       

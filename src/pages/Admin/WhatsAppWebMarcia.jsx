@@ -72,9 +72,9 @@ const EVO_MARCIA_URL = import.meta.env.VITE_EVO_MARCIA_URL || 'https://evo.lynxe
 const EVO_MARCIA_API_KEY = import.meta.env.VITE_EVO_MARCIA_API_KEY || '8A737100D665-451D-8E66-6CCF4380C98E';
 const EVO_MARCIA_INSTANCE = import.meta.env.VITE_EVO_MARCIA_INSTANCE || 'Marcia';
 
-// Modelos Gemini
-const AI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-const TRANSCRIPTION_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+// Modelos Gemini (melhores e mais econômicos ativos)
+const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+const TRANSCRIPTION_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
 
 const AVATAR_COLORS = [
   '#0d9488', '#0284c7', '#4f46e5', '#7c3aed', 
@@ -1881,6 +1881,9 @@ export default function WhatsAppWebMarcia() {
         activeChat={activeChat}
         activeMessages={waMessages}
         selectedChatJids={selectedChatJids}
+        apiUrl={EVO_MARCIA_URL}
+        apiKey={EVO_MARCIA_API_KEY}
+        instanceName={EVO_MARCIA_INSTANCE}
         onOpenMediaLightbox={(mediaItem) => {
           setIsReportsOpen(false);
           setLightboxData(mediaItem);
