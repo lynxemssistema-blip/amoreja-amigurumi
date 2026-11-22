@@ -209,9 +209,10 @@ export default function Home({ onAddToCart }) {
           .eq('section_key', 'hero')
           .maybeSingle();
 
+        let heroObj = HERO_DEFAULTS;
         if (heroData) {
           const extra = heroData.extra_data || {};
-          const heroObj = {
+          heroObj = {
             subtitle: heroData.subtitle || HERO_DEFAULTS.subtitle,
             title: heroData.title || HERO_DEFAULTS.title,
             description: heroData.description || HERO_DEFAULTS.description,

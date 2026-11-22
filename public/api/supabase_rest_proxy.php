@@ -37,6 +37,8 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 curl_setopt($ch, CURLOPT_HEADER, true);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
 if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'PATCH', 'DELETE'])) {
     $body = file_get_contents('php://input');
@@ -46,12 +48,39 @@ if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'PATCH', 'DELETE'])) {
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+$curlErr = curl_error($ch);
 curl_close($ch);
+
+if ($response === false) {
+    http_response_code(502);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Upstream unavailable', 'message' => $curlErr ?: 'Connection failed']);
+    exit;
+}
 
 $resHeaders = substr($response, 0, $headerSize);
 $resBody = substr($response, $headerSize);
 
-http_response_code($httpCode);
+if ($httpCode === 204) {
+    foreach (explode("\r\n", $resHeaders) as $h) {
+        if (stripos($h, 'Content-Range:') === 0 || stripos($h, 'Preference-Applied:') === 0) {
+            header($h);
+        }
+    }
+    http_response_code(204);
+    exit;
+}
+
+$trimmedBody = trim($resBody);
+if ($httpCode >= 400 && ($trimmedBody === '' || ($trimmedBody[0] !== '{' && $trimmedBody[0] !== '['))) {
+    $errText = $trimmedBody !== '' ? $trimmedBody : "HTTP $httpCode";
+    http_response_code($httpCode);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => $errText, 'message' => $errText]);
+    exit;
+}
+
+http_response_code($httpCode ?: 200);
 
 // Repassar headers relevantes como Content-Type e Content-Range
 foreach (explode("\r\n", $resHeaders) as $h) {

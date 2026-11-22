@@ -78,8 +78,6 @@ export default function WhatsAppReportsModal({
   // Áudio preview dentro da biblioteca
   const [playingAudioId, setPlayingAudioId] = useState(null);
 
-  if (!isOpen) return null;
-
   // Determinar conversas alvo
   const targetScope = selectedChatJids.length > 0
     ? `selected (${selectedChatJids.length} conversas selecionadas)`
@@ -90,6 +88,7 @@ export default function WhatsAppReportsModal({
   // Compilar mensagens e contatos a serem analisados
   // Se estiver numa conversa aberta, usa activeMessages. Se tiver selecionado várias, ou todas, agrega
   const analyzedMessages = useMemo(() => {
+    if (!isOpen) return [];
     if (activeChat && selectedChatJids.length === 0) {
       return activeMessages.map(m => ({
         ...m,
@@ -103,7 +102,7 @@ export default function WhatsAppReportsModal({
       chatName: activeChat?.name || 'Conversa',
       remoteJid: activeChat?.remoteJid || ''
     }));
-  }, [activeChat, activeMessages, selectedChatJids]);
+  }, [isOpen, activeChat, activeMessages, selectedChatJids]);
 
   // 1. EXTRAÇÃO DE INSTAGRAM E REDES SOCIAIS
   const extractedInstagram = useMemo(() => {
@@ -353,6 +352,8 @@ export default function WhatsAppReportsModal({
         .reduce((acc, curr) => acc + (curr.duration || 0), 0)
     };
   }, [mediaLibrary]);
+
+  if (!isOpen) return null;
 
   // 4. ANÁLISE IA COM GEMINI
   const handleGenerateAiReport = async () => {

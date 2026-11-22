@@ -17,20 +17,31 @@ const customFetch = async (url, options) => {
   }
   try {
     const res = await fetch(targetUrl, options);
-    // Proteção contra 'Unexpected end of JSON input':
-    // Se o backend/proxy devolver corpo vazio ou status de erro não-JSON, fornece fallback seguro
-    const clone = res.clone();
-    const text = await clone.text();
-    if (!text || text.trim() === '') {
-      return new Response(JSON.stringify([]), {
-        status: res.status >= 200 && res.status < 300 ? 200 : res.status,
+    // Preserva respostas sem corpo (204/205/304/HEAD) e encapsula falhas de proxy em JSON válido
+    if (res.status === 204 || res.status === 205 || res.status === 304 || options?.method?.toUpperCase() === 'HEAD') {
+      return res;
+    }
+    const text = await res.clone().text();
+    const trimmed = text ? text.trim() : '';
+    if (!trimmed) {
+      if (!res.ok || (res.headers.get('content-type') || '').includes('text/html')) {
+        return new Response(JSON.stringify({ message: `Resposta vazia do servidor (HTTP ${res.status})` }), {
+          status: res.ok ? 502 : res.status,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return res;
+    }
+    if (!res.ok && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return new Response(JSON.stringify({ message: trimmed.slice(0, 300) }), {
+        status: res.status,
         headers: { 'Content-Type': 'application/json' }
       });
     }
     return res;
   } catch (err) {
-    return new Response(JSON.stringify([]), {
-      status: 200,
+    return new Response(JSON.stringify({ message: err?.message || 'Erro de conexão com o servidor' }), {
+      status: 503,
       headers: { 'Content-Type': 'application/json' }
     });
   }

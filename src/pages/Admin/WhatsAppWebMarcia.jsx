@@ -585,13 +585,34 @@ const WhatsAppMediaMessage = ({
 // Cache global de avatares com falha (evita requisições 403 Forbidden / 404 repetidas)
 const failedAvatars = new Set();
 
+const isExpiredWhatsAppUrl = (url) => {
+  if (!url || typeof url !== 'string') return true;
+  try {
+    const parsed = new URL(url);
+    const oe = parsed.searchParams.get('oe');
+    if (oe && /^[0-9a-fA-F]+$/.test(oe)) {
+      if (parseInt(oe, 16) * 1000 < Date.now()) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
+
 // ── AVATAR ──────────────────────────────────────────────────────────────────
 const Avatar = ({ name, picUrl, jidKey, size = 40 }) => {
-  const [imgFailed, setImgFailed] = useState(picUrl ? failedAvatars.has(picUrl) : false);
+  const [imgFailed, setImgFailed] = useState(() =>
+    picUrl ? (failedAvatars.has(picUrl) || isExpiredWhatsAppUrl(picUrl)) : false
+  );
+
+  useEffect(() => {
+    setImgFailed(picUrl ? (failedAvatars.has(picUrl) || isExpiredWhatsAppUrl(picUrl)) : false);
+  }, [picUrl]);
+
   const initial = (name || '?').charAt(0).toUpperCase();
   const bg = getColor(jidKey || name || '');
 
-  const canShowImg = picUrl && !imgFailed && !failedAvatars.has(picUrl);
+  const canShowImg = Boolean(picUrl) && !imgFailed && !failedAvatars.has(picUrl) && !isExpiredWhatsAppUrl(picUrl);
 
   return (
     <div style={{
